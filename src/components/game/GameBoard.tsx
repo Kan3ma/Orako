@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, Player, GameState } from '@/types/game';
 import { createDeck, dealInitialCards, checkWinCondition, canUseCardToWin } from '@/utils/gameLogic';
+import { makeAIDecision, getAIPlayerDelay } from '@/utils/aiLogic';
 import { PlayingCard } from './PlayingCard';
 import { PlayerHand } from './PlayerHand';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,86 @@ export const GameBoard = ({ players, onGameEnd }: GameBoardProps) => {
   useEffect(() => {
     initializeGame();
   }, [players]);
+
+  const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+
+  // Handle AI player turns
+  useEffect(() => {
+    if (gameState.gameStarted && !gameState.gameEnded && currentPlayer) {
+      const isAIPlayer = currentPlayer.name.includes('AI Player');
+      
+      if (isAIPlayer) {
+        const delay = getAIPlayerDelay();
+        const timeoutId = setTimeout(() => {
+          handleAITurn();
+        }, delay);
+        
+        return () => clearTimeout(timeoutId);
+      }
+    }
+  }, [gameState.currentPlayerIndex, gameState.gameStarted, gameState.gameEnded]);
+
+  const handleAITurn = useCallback(() => {
+    if (!currentPlayer || gameState.gameEnded) return;
+
+    const decision = makeAIDecision(
+      currentPlayer, 
+      gameState.deck.length, 
+      gameState.lastDiscardedCard, 
+      gameState.canClaim
+    );
+
+    switch (decision.action) {
+      case 'draw':
+        drawCard();
+        break;
+      case 'discard':
+        if (decision.cardIndex !== undefined) {
+          aiDiscardCard(decision.cardIndex);
+        }
+        break;
+      case 'claim':
+        const playerIndex = gameState.players.findIndex(p => p.id === currentPlayer.id);
+        claimCard(playerIndex);
+        break;
+    }
+  }, [currentPlayer, gameState]);
+
+  const aiDiscardCard = (cardIndex: number) => {
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    const discardedCard = currentPlayer.hand[cardIndex];
+    
+    // Remove card from player's hand
+    const newHand = currentPlayer.hand.filter((_, index) => index !== cardIndex);
+    
+    const updatedPlayers = [...gameState.players];
+    updatedPlayers[gameState.currentPlayerIndex] = {
+      ...currentPlayer,
+      hand: newHand,
+      isCurrentTurn: false
+    };
+
+    // Move to next player
+    const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
+    updatedPlayers[nextPlayerIndex] = {
+      ...updatedPlayers[nextPlayerIndex],
+      isCurrentTurn: true
+    };
+
+    setGameState(prev => ({
+      ...prev,
+      players: updatedPlayers,
+      discardPile: [...prev.discardPile, discardedCard],
+      currentPlayerIndex: nextPlayerIndex,
+      lastDiscardedCard: discardedCard,
+      canClaim: true
+    }));
+
+    // Check if any other player can claim this card to win
+    setTimeout(() => {
+      setGameState(prev => ({ ...prev, canClaim: false }));
+    }, 3000);
+  };
 
   const initializeGame = () => {
     const deck = createDeck();
@@ -183,8 +264,6 @@ export const GameBoard = ({ players, onGameEnd }: GameBoardProps) => {
     }
   };
 
-  const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-
   return (
     <div className="min-h-screen bg-gradient-felt p-4">
       <div className="max-w-7xl mx-auto">
@@ -206,8 +285,8 @@ export const GameBoard = ({ players, onGameEnd }: GameBoardProps) => {
             <p className="text-foreground/60 mb-2">Deck ({gameState.deck.length})</p>
             <PlayingCard 
               isFlipped 
-              onClick={currentPlayer?.isCurrentTurn ? drawCard : undefined}
-              className={currentPlayer?.isCurrentTurn ? "hover:shadow-gold cursor-pointer" : "cursor-not-allowed opacity-50"}
+              onClick={currentPlayer?.isCurrentTurn && !currentPlayer.name.includes('AI Player') ? drawCard : undefined}
+              className={currentPlayer?.isCurrentTurn && !currentPlayer.name.includes('AI Player') ? "hover:shadow-gold cursor-pointer" : "cursor-not-allowed opacity-50"}
               size="lg"
             />
           </div>
@@ -227,7 +306,7 @@ export const GameBoard = ({ players, onGameEnd }: GameBoardProps) => {
         </div>
 
         {/* Current Player Actions */}
-        {currentPlayer?.isCurrentTurn && currentPlayer.hand.length > 3 && (
+        {currentPlayer?.isCurrentTurn && currentPlayer.hand.length > 3 && !currentPlayer.name.includes('AI Player') && (
           <div className="text-center mb-6">
             <p className="text-foreground/80 mb-4">Select a card to discard:</p>
             <Button 
@@ -240,6 +319,13 @@ export const GameBoard = ({ players, onGameEnd }: GameBoardProps) => {
           </div>
         )}
 
+        {/* AI Player Indicator */}
+        {currentPlayer?.isCurrentTurn && currentPlayer.name.includes('AI Player') && (
+          <div className="text-center mb-6">
+            <p className="text-foreground/80 mb-4">🤖 {currentPlayer.name} is thinking...</p>
+          </div>
+        )}
+
         {/* Players */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {gameState.players.map((player, index) => (
@@ -247,10 +333,10 @@ export const GameBoard = ({ players, onGameEnd }: GameBoardProps) => {
               key={player.id}
               player={player}
               isCurrentPlayer={index === gameState.currentPlayerIndex}
-              onCardSelect={index === gameState.currentPlayerIndex ? setSelectedCardIndex : undefined}
-              selectedCardIndex={index === gameState.currentPlayerIndex ? selectedCardIndex : null}
-              onClaimCard={gameState.canClaim ? () => claimCard(index) : undefined}
-              canClaim={gameState.canClaim && canUseCardToWin(player.hand, gameState.lastDiscardedCard!)}
+              onCardSelect={index === gameState.currentPlayerIndex && !player.name.includes('AI Player') ? setSelectedCardIndex : undefined}
+              selectedCardIndex={index === gameState.currentPlayerIndex && !player.name.includes('AI Player') ? selectedCardIndex : null}
+              onClaimCard={gameState.canClaim && !player.name.includes('AI Player') ? () => claimCard(index) : undefined}
+              canClaim={gameState.canClaim && canUseCardToWin(player.hand, gameState.lastDiscardedCard!) && !player.name.includes('AI Player')}
             />
           ))}
         </div>
