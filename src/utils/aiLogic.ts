@@ -82,6 +82,6 @@ const calculateCardUsefulness = (card: Card, hand: Card[]): number => {
 };
 
 export const getAIPlayerDelay = (): number => {
-  // Random delay between 1.5 and 3 seconds to simulate thinking
-  return Math.random() * 1500 + 1500;
+  // Random delay between 0.8 and 1.5 seconds to simulate thinking
+  return Math.random() * 700 + 800;
 };

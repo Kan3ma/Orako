@@ -270,7 +270,7 @@ export const GameBoard = ({ players, onGameEnd }: GameBoardProps) => {
         {/* Game Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gold mb-2">NJUKA</h1>
-          <p className="text-foreground/80">
+          <p className="text-white font-semibold">
             {gameState.gameEnded 
               ? `🎉 ${gameState.winner?.name} Wins!` 
               : `${currentPlayer?.name}'s Turn`
@@ -282,7 +282,7 @@ export const GameBoard = ({ players, onGameEnd }: GameBoardProps) => {
         <div className="flex justify-center items-center gap-8 mb-8">
           {/* Deck */}
           <div className="text-center">
-            <p className="text-foreground/60 mb-2">Deck ({gameState.deck.length})</p>
+            <p className="text-white/80 mb-2 font-medium">Deck ({gameState.deck.length})</p>
             <PlayingCard 
               isFlipped 
               onClick={currentPlayer?.isCurrentTurn && !currentPlayer.name.includes('AI Player') ? drawCard : undefined}
@@ -293,7 +293,7 @@ export const GameBoard = ({ players, onGameEnd }: GameBoardProps) => {
 
           {/* Discard Pile */}
           <div className="text-center">
-            <p className="text-foreground/60 mb-2">
+            <p className="text-white/80 mb-2 font-medium">
               Discard Pile ({gameState.discardPile.length})
               {gameState.canClaim && " - Can Claim!"}
             </p>
@@ -308,7 +308,7 @@ export const GameBoard = ({ players, onGameEnd }: GameBoardProps) => {
         {/* Current Player Actions */}
         {currentPlayer?.isCurrentTurn && currentPlayer.hand.length > 3 && !currentPlayer.name.includes('AI Player') && (
           <div className="text-center mb-6">
-            <p className="text-foreground/80 mb-4">Select a card to discard:</p>
+            <p className="text-white font-medium mb-4">Select a card to discard:</p>
             <Button 
               onClick={() => selectedCardIndex !== null && discardCard(selectedCardIndex)}
               disabled={selectedCardIndex === null}
@@ -322,7 +322,7 @@ export const GameBoard = ({ players, onGameEnd }: GameBoardProps) => {
         {/* AI Player Indicator */}
         {currentPlayer?.isCurrentTurn && currentPlayer.name.includes('AI Player') && (
           <div className="text-center mb-6">
-            <p className="text-foreground/80 mb-4">🤖 {currentPlayer.name} is thinking...</p>
+            <p className="text-white font-medium mb-4">🤖 {currentPlayer.name} is thinking...</p>
           </div>
         )}
 
