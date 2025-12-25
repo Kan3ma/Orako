@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, Player, GameState } from '@/types/game';
-import { createDeck, dealInitialCards, checkWinCondition, canUseCardToWin } from '@/utils/gameLogic';
+import { createDeck, dealInitialCards, checkWinCondition, canUseCardToWin, getRankValue } from '@/utils/gameLogic';
 import { makeAIDecision, getAIPlayerDelay } from '@/utils/aiLogic';
 import { PlayingCard } from './PlayingCard';
 import { PlayerHand } from './PlayerHand';
@@ -50,80 +50,192 @@ export const GameBoard = ({ players, onGameEnd, isMultiplayer = false, room, isH
 
   // Handle AI player turns
   useEffect(() => {
-    if (gameState.gameStarted && !gameState.gameEnded && currentPlayer) {
-      const isAIPlayer = currentPlayer.name.includes('AI Player');
-      
-      if (isAIPlayer) {
-        const delay = getAIPlayerDelay();
-        const timeoutId = setTimeout(() => {
-          handleAITurn();
-        }, delay);
-        
-        return () => clearTimeout(timeoutId);
-      }
-    }
-  }, [gameState.currentPlayerIndex, gameState.gameStarted, gameState.gameEnded]);
+    if (!gameState.gameStarted || gameState.gameEnded || !currentPlayer) return;
+    
+    const isAIPlayer = currentPlayer.name.includes('AI Player');
+    if (!isAIPlayer) return;
 
-  const handleAITurn = useCallback(() => {
-    if (!currentPlayer || gameState.gameEnded) return;
-
-    const decision = makeAIDecision(
-      currentPlayer, 
-      gameState.deck.length, 
-      gameState.lastDiscardedCard, 
-      gameState.canClaim
-    );
-
-    switch (decision.action) {
-      case 'draw':
-        drawCard();
-        break;
-      case 'discard':
-        if (decision.cardIndex !== undefined) {
-          aiDiscardCard(decision.cardIndex);
+    const delay = getAIPlayerDelay();
+    const timeoutId = setTimeout(() => {
+      // Get fresh state values inside the timeout
+      setGameState(prevState => {
+        const aiPlayer = prevState.players[prevState.currentPlayerIndex];
+        if (!aiPlayer || prevState.gameEnded || !aiPlayer.name.includes('AI Player')) {
+          return prevState;
         }
-        break;
-      case 'claim':
-        const playerIndex = gameState.players.findIndex(p => p.id === currentPlayer.id);
-        claimCard(playerIndex);
-        break;
-    }
-  }, [currentPlayer, gameState]);
 
-  const aiDiscardCard = (cardIndex: number) => {
-    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-    const discardedCard = currentPlayer.hand[cardIndex];
-    
-    // Remove card from player's hand
-    const newHand = currentPlayer.hand.filter((_, index) => index !== cardIndex);
-    
-    const updatedPlayers = [...gameState.players];
-    updatedPlayers[gameState.currentPlayerIndex] = {
-      ...currentPlayer,
-      hand: newHand,
-      isCurrentTurn: false
-    };
+        const decision = makeAIDecision(
+          aiPlayer,
+          prevState.deck.length,
+          prevState.lastDiscardedCard,
+          prevState.canClaim
+        );
 
-    // Move to next player
-    const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
-    updatedPlayers[nextPlayerIndex] = {
-      ...updatedPlayers[nextPlayerIndex],
-      isCurrentTurn: true
-    };
+        // Handle AI decision with fresh state
+        if (decision.action === 'claim' && prevState.canClaim && prevState.lastDiscardedCard) {
+          if (canUseCardToWin(aiPlayer.hand, prevState.lastDiscardedCard)) {
+            const updatedPlayers = [...prevState.players];
+            updatedPlayers[prevState.currentPlayerIndex] = {
+              ...aiPlayer,
+              hand: [...aiPlayer.hand, prevState.lastDiscardedCard],
+              isWinner: true
+            };
 
-    setGameState(prev => ({
-      ...prev,
-      players: updatedPlayers,
-      discardPile: [...prev.discardPile, discardedCard],
-      currentPlayerIndex: nextPlayerIndex,
-      lastDiscardedCard: discardedCard,
-      canClaim: true
-    }));
+            toast({
+              title: "🎉 Claimed Victory!",
+              description: `${aiPlayer.name} claims the card and wins!`,
+            });
 
-    // Check if any other player can claim this card to win
-    setTimeout(() => {
-      setGameState(prev => ({ ...prev, canClaim: false }));
-    }, 3000);
+            onGameEnd?.(aiPlayer.name);
+
+            return {
+              ...prevState,
+              players: updatedPlayers,
+              gameEnded: true,
+              winner: updatedPlayers[prevState.currentPlayerIndex],
+              canClaim: false
+            };
+          }
+        }
+
+        if (decision.action === 'draw') {
+          if (prevState.deck.length === 0) {
+            // Reshuffle discard pile
+            return {
+              ...prevState,
+              deck: [...prevState.discardPile],
+              discardPile: []
+            };
+          }
+
+          const drawnCard = prevState.deck[prevState.deck.length - 1];
+
+          // Check if drawing this card wins the game
+          if (canUseCardToWin(aiPlayer.hand, drawnCard)) {
+            const updatedPlayers = [...prevState.players];
+            updatedPlayers[prevState.currentPlayerIndex] = {
+              ...aiPlayer,
+              hand: [...aiPlayer.hand, drawnCard],
+              isWinner: true
+            };
+
+            toast({
+              title: "🎉 Game Won!",
+              description: `${aiPlayer.name} wins with a perfect hand!`,
+            });
+
+            onGameEnd?.(aiPlayer.name);
+
+            return {
+              ...prevState,
+              players: updatedPlayers,
+              deck: prevState.deck.slice(0, -1),
+              gameEnded: true,
+              winner: updatedPlayers[prevState.currentPlayerIndex],
+              canClaim: false
+            };
+          }
+
+          // Add card to AI's hand, then immediately discard
+          const newHand = [...aiPlayer.hand, drawnCard];
+          const cardToDiscardIndex = findBestCardToDiscard(newHand);
+          const discardedCard = newHand[cardToDiscardIndex];
+          const finalHand = newHand.filter((_, idx) => idx !== cardToDiscardIndex);
+
+          const updatedPlayers = [...prevState.players];
+          updatedPlayers[prevState.currentPlayerIndex] = {
+            ...aiPlayer,
+            hand: finalHand,
+            isCurrentTurn: false
+          };
+
+          const nextPlayerIndex = (prevState.currentPlayerIndex + 1) % prevState.players.length;
+          updatedPlayers[nextPlayerIndex] = {
+            ...updatedPlayers[nextPlayerIndex],
+            isCurrentTurn: true
+          };
+
+          // Set timeout to reset canClaim
+          setTimeout(() => {
+            setGameState(prev => ({ ...prev, canClaim: false }));
+          }, 3000);
+
+          return {
+            ...prevState,
+            players: updatedPlayers,
+            deck: prevState.deck.slice(0, -1),
+            discardPile: [...prevState.discardPile, discardedCard],
+            currentPlayerIndex: nextPlayerIndex,
+            lastDiscardedCard: discardedCard,
+            canClaim: true
+          };
+        }
+
+        if (decision.action === 'discard' && decision.cardIndex !== undefined) {
+          const discardedCard = aiPlayer.hand[decision.cardIndex];
+          const newHand = aiPlayer.hand.filter((_, index) => index !== decision.cardIndex);
+
+          const updatedPlayers = [...prevState.players];
+          updatedPlayers[prevState.currentPlayerIndex] = {
+            ...aiPlayer,
+            hand: newHand,
+            isCurrentTurn: false
+          };
+
+          const nextPlayerIndex = (prevState.currentPlayerIndex + 1) % prevState.players.length;
+          updatedPlayers[nextPlayerIndex] = {
+            ...updatedPlayers[nextPlayerIndex],
+            isCurrentTurn: true
+          };
+
+          setTimeout(() => {
+            setGameState(prev => ({ ...prev, canClaim: false }));
+          }, 3000);
+
+          return {
+            ...prevState,
+            players: updatedPlayers,
+            discardPile: [...prevState.discardPile, discardedCard],
+            currentPlayerIndex: nextPlayerIndex,
+            lastDiscardedCard: discardedCard,
+            canClaim: true
+          };
+        }
+
+        return prevState;
+      });
+    }, delay);
+
+    return () => clearTimeout(timeoutId);
+  }, [gameState.currentPlayerIndex, gameState.gameStarted, gameState.gameEnded, onGameEnd]);
+
+  // Helper function for AI to find best card to discard
+  const findBestCardToDiscard = (hand: Card[]): number => {
+    const cardScores = hand.map((card, index) => {
+      let score = 0;
+      const cardValue = getRankValue(card.rank);
+
+      // Check for matching rank cards
+      const matchingRankCards = hand.filter(c => c.rank === card.rank);
+      if (matchingRankCards.length >= 2) score += 10;
+
+      // Check for consecutive cards
+      const consecutiveCards = hand.filter(c => {
+        const otherValue = getRankValue(c.rank);
+        if ([11, 12, 13].includes(cardValue) && [11, 12, 13].includes(otherValue)) return true;
+        return Math.abs(cardValue - otherValue) === 1;
+      });
+      if (consecutiveCards.length >= 2) score += 10;
+
+      // Middle values are more versatile
+      if (cardValue >= 4 && cardValue <= 10) score += 2;
+      if ([11, 12, 13].includes(cardValue)) score += 3;
+
+      return { index, score };
+    });
+
+    cardScores.sort((a, b) => a.score - b.score);
+    return cardScores[0].index;
   };
 
   const initializeGame = () => {
