@@ -55,34 +55,35 @@ export const checkWinCondition = (hand: Card[]): WinCondition => {
     isWinning: false
   };
 
-  if (hand.length < 4) return result;
+  if (hand.length !== 4) return result;
 
-  // Find matching pairs (same rank)
-  const rankGroups: Record<string, Card[]> = {};
-  hand.forEach(card => {
-    if (!rankGroups[card.rank]) {
-      rankGroups[card.rank] = [];
+  // Try all possible ways to split 4 cards into 2 pairs
+  // Indices: 0,1,2,3 -> possible pairings: (01,23), (02,13), (03,12)
+  const pairings = [
+    [[0, 1], [2, 3]],
+    [[0, 2], [1, 3]],
+    [[0, 3], [1, 2]]
+  ];
+
+  for (const pairing of pairings) {
+    const pair1 = [hand[pairing[0][0]], hand[pairing[0][1]]];
+    const pair2 = [hand[pairing[1][0]], hand[pairing[1][1]]];
+
+    // Check if pair1 is matching and pair2 is consecutive
+    if (pair1[0].rank === pair1[1].rank && isConsecutive(pair2[0].rank, pair2[1].rank)) {
+      result.matchingPair = pair1;
+      result.consecutivePair = pair2;
+      result.isWinning = true;
+      return result;
     }
-    rankGroups[card.rank].push(card);
-  });
 
-  const matchingPairs = Object.values(rankGroups).filter(group => group.length >= 2);
-  
-  // Find consecutive pairs
-  const consecutivePairs: Card[][] = [];
-  for (let i = 0; i < hand.length; i++) {
-    for (let j = i + 1; j < hand.length; j++) {
-      if (isConsecutive(hand[i].rank, hand[j].rank)) {
-        consecutivePairs.push([hand[i], hand[j]]);
-      }
+    // Check if pair2 is matching and pair1 is consecutive
+    if (pair2[0].rank === pair2[1].rank && isConsecutive(pair1[0].rank, pair1[1].rank)) {
+      result.matchingPair = pair2;
+      result.consecutivePair = pair1;
+      result.isWinning = true;
+      return result;
     }
-  }
-
-  // Check if we have both types of pairs
-  if (matchingPairs.length > 0 && consecutivePairs.length > 0) {
-    result.matchingPair = matchingPairs[0].slice(0, 2);
-    result.consecutivePair = consecutivePairs[0];
-    result.isWinning = true;
   }
 
   return result;
