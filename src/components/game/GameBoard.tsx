@@ -21,13 +21,15 @@ interface GameRoom {
 interface GameBoardProps {
   players: string[];
   onGameEnd?: (winner: string) => void;
+  onRematch?: () => void;
+  onChangeMode?: () => void;
   isMultiplayer?: boolean;
   room?: GameRoom | null;
   isHost?: boolean;
   onUpdateGameState?: (gameState: GameState, nextTurn: 'host' | 'guest') => void;
 }
 
-export const GameBoard = ({ players, onGameEnd, isMultiplayer = false, room, isHost, onUpdateGameState }: GameBoardProps) => {
+export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, isMultiplayer = false, room, isHost, onUpdateGameState }: GameBoardProps) => {
   const [gameState, setGameState] = useState<GameState>({
     players: [],
     deck: [],
@@ -393,6 +395,25 @@ export const GameBoard = ({ players, onGameEnd, isMultiplayer = false, room, isH
   return (
     <div className="min-h-screen bg-gradient-felt p-4">
       <div className="max-w-7xl mx-auto">
+        {/* Game Over Options */}
+        {gameState.gameEnded && (
+          <div className="flex justify-center gap-4 mb-6">
+            <Button 
+              onClick={onRematch}
+              className="bg-gradient-gold hover:bg-gold-dim text-background"
+            >
+              Rematch
+            </Button>
+            <Button 
+              onClick={onChangeMode}
+              variant="outline"
+              className="border-gold text-gold hover:bg-gold hover:text-background"
+            >
+              Change Game Mode
+            </Button>
+          </div>
+        )}
+
         {/* Game Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gold mb-2">NJUKA</h1>
@@ -468,15 +489,17 @@ export const GameBoard = ({ players, onGameEnd, isMultiplayer = false, room, isH
         </div>
 
         {/* Game Controls */}
-        <div className="text-center mt-8">
-          <Button 
-            onClick={initializeGame}
-            variant="outline"
-            className="border-gold text-gold hover:bg-gold hover:text-background"
-          >
-            New Game
-          </Button>
-        </div>
+        {!gameState.gameEnded && (
+          <div className="text-center mt-8">
+            <Button 
+              onClick={initializeGame}
+              variant="outline"
+              className="border-gold text-gold hover:bg-gold hover:text-background"
+            >
+              New Game
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
