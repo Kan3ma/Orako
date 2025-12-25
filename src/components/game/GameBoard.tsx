@@ -157,10 +157,7 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, isMulti
             isCurrentTurn: true
           };
 
-          // Set timeout to reset canClaim
-          setTimeout(() => {
-            setGameState(prev => ({ ...prev, canClaim: false }));
-          }, 3000);
+          // Claim window closes when next player draws from deck, not by timeout
 
           return {
             ...prevState,
@@ -190,9 +187,7 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, isMulti
             isCurrentTurn: true
           };
 
-          setTimeout(() => {
-            setGameState(prev => ({ ...prev, canClaim: false }));
-          }, 3000);
+          // Claim window closes when next player draws from deck, not by timeout
 
           return {
             ...prevState,
@@ -266,6 +261,17 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, isMulti
   };
 
   const drawCard = () => {
+    // Don't allow drawing if player already has 4 cards
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    if (currentPlayer.hand.length >= 4) {
+      toast({
+        title: "Cannot Draw",
+        description: "You must discard a card first. Maximum 4 cards allowed.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (gameState.deck.length === 0) {
       // Reshuffle discard pile back into deck
       const newDeck = [...gameState.discardPile];
@@ -278,7 +284,6 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, isMulti
     }
 
     const drawnCard = gameState.deck[gameState.deck.length - 1];
-    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
     
     // Check if drawing this card wins the game
     if (canUseCardToWin(currentPlayer.hand, drawnCard)) {
@@ -308,7 +313,7 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, isMulti
       return;
     }
 
-    // Add card to player's hand
+    // Add card to player's hand - this closes the claim window
     const updatedPlayers = [...gameState.players];
     updatedPlayers[gameState.currentPlayerIndex] = {
       ...currentPlayer,
@@ -356,11 +361,7 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, isMulti
     }));
 
     setSelectedCardIndex(null);
-
-    // Check if any other player can claim this card to win
-    setTimeout(() => {
-      setGameState(prev => ({ ...prev, canClaim: false }));
-    }, 3000);
+    // Claim window closes when next player draws from deck, not by timeout
   };
 
   const claimCard = (playerIndex: number) => {
