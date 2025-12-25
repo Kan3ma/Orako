@@ -8,12 +8,26 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
+interface GameRoom {
+  id: string;
+  room_code: string;
+  host_name: string;
+  guest_name: string | null;
+  game_state: GameState | null;
+  status: 'waiting' | 'playing' | 'finished';
+  current_turn: 'host' | 'guest';
+}
+
 interface GameBoardProps {
   players: string[];
   onGameEnd?: (winner: string) => void;
+  isMultiplayer?: boolean;
+  room?: GameRoom | null;
+  isHost?: boolean;
+  onUpdateGameState?: (gameState: GameState, nextTurn: 'host' | 'guest') => void;
 }
 
-export const GameBoard = ({ players, onGameEnd }: GameBoardProps) => {
+export const GameBoard = ({ players, onGameEnd, isMultiplayer = false, room, isHost, onUpdateGameState }: GameBoardProps) => {
   const [gameState, setGameState] = useState<GameState>({
     players: [],
     deck: [],
