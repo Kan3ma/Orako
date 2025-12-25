@@ -41,11 +41,26 @@ const Index = () => {
 
   const handleGameEnd = (winner: string) => {
     console.log('Game won by:', winner);
-    setTimeout(() => {
-      setGameMode('selection');
-      setPlayMode(null);
-      setPlayers([]);
-    }, 3000);
+    // No longer auto-navigate - game stays on screen
+  };
+
+  const handleRematch = () => {
+    // Re-trigger game with same settings
+    if (playMode === 'computer') {
+      const aiCount = players.length - 1;
+      handlePlayComputer(aiCount);
+    } else if (playMode === 'friends') {
+      handleMultiplayerStart();
+    }
+  };
+
+  const handleChangeMode = () => {
+    if (playMode === 'friends') {
+      leaveRoom();
+    }
+    setGameMode('selection');
+    setPlayMode(null);
+    setPlayers([]);
   };
 
   const resetGame = () => {
@@ -85,6 +100,8 @@ const Index = () => {
       <GameBoard 
         players={players} 
         onGameEnd={handleGameEnd}
+        onRematch={handleRematch}
+        onChangeMode={handleChangeMode}
         isMultiplayer={true}
         room={room}
         isHost={isHost}
@@ -93,7 +110,14 @@ const Index = () => {
     );
   }
 
-  return <GameBoard players={players} onGameEnd={handleGameEnd} />;
+  return (
+    <GameBoard 
+      players={players} 
+      onGameEnd={handleGameEnd} 
+      onRematch={handleRematch}
+      onChangeMode={handleChangeMode}
+    />
+  );
 };
 
 export default Index;
