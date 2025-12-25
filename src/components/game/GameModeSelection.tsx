@@ -1,33 +1,21 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Bot, Users, Crown, Search } from 'lucide-react';
+import { Bot, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface GameModeSelectionProps {
   onPlayComputer: (aiPlayers: number) => void;
-  onPlayFriends: (mode: 'host' | 'join', roomCode?: string) => void;
+  onPlayFriends: () => void;
 }
 
 export const GameModeSelection = ({ onPlayComputer, onPlayFriends }: GameModeSelectionProps) => {
   const [selectedMode, setSelectedMode] = useState<'computer' | 'friends' | null>(null);
   const [aiPlayerCount, setAiPlayerCount] = useState(2);
-  const [roomCode, setRoomCode] = useState('');
 
   const handleComputerPlay = () => {
     onPlayComputer(aiPlayerCount);
-  };
-
-  const handleHostGame = () => {
-    onPlayFriends('host');
-  };
-
-  const handleJoinGame = () => {
-    if (roomCode.trim()) {
-      onPlayFriends('join', roomCode.trim());
-    }
   };
 
   if (selectedMode === 'computer') {
@@ -86,72 +74,8 @@ export const GameModeSelection = ({ onPlayComputer, onPlayFriends }: GameModeSel
   }
 
   if (selectedMode === 'friends') {
-    return (
-      <div className="min-h-screen bg-gradient-felt flex items-center justify-center p-4">
-        <Card className="w-full max-w-md bg-secondary/95 backdrop-blur border-border">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold text-gold flex items-center justify-center gap-2">
-              <Users className="w-6 h-6" />
-              Play with Friends
-            </CardTitle>
-            <CardDescription>Host a game or join an existing room</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-4">
-              <Button
-                onClick={handleHostGame}
-                className={cn(
-                  "w-full h-12 text-lg bg-gradient-gold hover:bg-gold-dim text-background",
-                  "transition-smooth flex items-center justify-center gap-2"
-                )}
-              >
-                <Crown className="w-5 h-5" />
-                Host a Game
-              </Button>
-              
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-border" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-secondary px-2 text-muted-foreground">Or</span>
-                </div>
-              </div>
-              
-              <div className="space-y-3">
-                <Label htmlFor="roomCode">Join with Room Code</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="roomCode"
-                    value={roomCode}
-                    onChange={(e) => setRoomCode(e.target.value)}
-                    placeholder="Enter room code"
-                    className="flex-1"
-                    onKeyPress={(e) => e.key === 'Enter' && handleJoinGame()}
-                  />
-                  <Button
-                    onClick={handleJoinGame}
-                    disabled={!roomCode.trim()}
-                    variant="outline"
-                    size="icon"
-                  >
-                    <Search className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-            
-            <Button
-              variant="outline"
-              onClick={() => setSelectedMode(null)}
-              className="w-full"
-            >
-              Back
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    onPlayFriends();
+    return null;
   }
 
   return (
