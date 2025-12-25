@@ -40,6 +40,9 @@ export const isConsecutive = (rank1: Rank, rank2: Rank): boolean => {
   const val1 = getRankValue(rank1);
   const val2 = getRankValue(rank2);
   
+  // Cards must have different values to be consecutive (no matching cards)
+  if (val1 === val2) return false;
+  
   // Handle J, Q, K special case - they can be in any order among themselves
   if ([11, 12, 13].includes(val1) && [11, 12, 13].includes(val2)) {
     return true;
