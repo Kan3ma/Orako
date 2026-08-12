@@ -9,11 +9,11 @@ interface NjukaHomeProps {
 }
 
 export const NjukaHome = ({ onPlayComputer, onPlayFriends }: NjukaHomeProps) => (
-  <div className="relative min-h-screen bg-gradient-felt flex items-center justify-center p-4 pt-20 sm:pt-4">
+  <div className="relative min-h-screen bg-gradient-felt flex items-center justify-center p-4 pt-20">
     <Button
       asChild
       variant="outline"
-      className="absolute left-4 top-4 border-gold/50 bg-secondary/90 text-gold hover:border-gold hover:bg-gold hover:text-background sm:left-6 sm:top-6"
+      className="fixed left-4 top-4 z-50 border-gold/50 bg-secondary text-gold shadow-deep hover:border-gold hover:bg-gold hover:text-background sm:left-6 sm:top-6"
     >
       <Link to="/">Home</Link>
     </Button>
