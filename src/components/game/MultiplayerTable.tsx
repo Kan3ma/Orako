@@ -3,6 +3,8 @@ import { canUseCardToWin } from '@/utils/gameLogic';
 import { PlayingCard } from './PlayingCard';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { GameSettingsDialog, NjukaSettings } from './GameSettingsDialog';
+import type { SpecialPairOption } from '@/utils/gameLogic';
 
 interface MultiplayerTableProps {
   gameState: GameState;
@@ -18,11 +20,16 @@ interface MultiplayerTableProps {
   isHost: boolean;
   endCondition: 'first_winner' | 'last_two';
   onUpdateEndCondition?: (condition: 'first_winner' | 'last_two') => void;
+  settings: NjukaSettings;
+  onSettingsChange?: (settings: NjukaSettings) => void;
+  specialPairs: SpecialPairOption[];
+  onSpecialDiscard: (option: SpecialPairOption) => void;
 }
 
 export const MultiplayerTable = ({
   gameState, localPlayerIndex, selectedCardIndex, onSelectCard, onDraw, onDiscard, onClaim, onRematch, cardMotion,
   roomCode, isHost, endCondition, onUpdateEndCondition,
+  settings, onSettingsChange, specialPairs, onSpecialDiscard,
 }: MultiplayerTableProps) => {
   const localPlayer = gameState.players[localPlayerIndex];
   const opponents = gameState.players.filter((_, index) => index !== localPlayerIndex);
@@ -35,7 +42,7 @@ export const MultiplayerTable = ({
   const canDraw = !gameState.gameEnded && isLocalTurn && localPlayer?.hand.length < 4;
   const canDiscard = !gameState.gameEnded && isLocalTurn && localPlayer?.hand.length === 4;
   const canClaim = !gameState.gameEnded && gameState.canClaim && !!gameState.lastDiscardedCard &&
-    canUseCardToWin(localPlayer?.hand ?? [], gameState.lastDiscardedCard);
+    canUseCardToWin(localPlayer?.hand ?? [], gameState.lastDiscardedCard, settings.tenJackConsecutive);
   const discarded = gameState.discardPile.slice(-4);
 
   return (
@@ -50,17 +57,7 @@ export const MultiplayerTable = ({
       <div className="absolute right-4 top-4 z-40 rounded-xl border border-gold/40 bg-background/90 px-4 py-2 text-right shadow-xl sm:right-6 sm:top-6">
         <p className="text-xs uppercase tracking-wider text-foreground/60">Room code</p>
         <p className="text-xl font-black tracking-widest text-gold">{roomCode}</p>
-        {isHost && (
-          <select
-            value={endCondition}
-            onChange={event => onUpdateEndCondition?.(event.target.value as 'first_winner' | 'last_two')}
-            className="mt-2 max-w-48 rounded border border-border bg-secondary p-1 text-xs text-foreground"
-            aria-label="Game end rule"
-          >
-            <option value="first_winner">End at first winner</option>
-            <option value="last_two">End with two remaining</option>
-          </select>
-        )}
+        <div className="mt-2"><GameSettingsDialog settings={settings} onChange={onSettingsChange} showPonch isHost={isHost} endCondition={endCondition} onEndConditionChange={onUpdateEndCondition} changesApplyNextRound={!gameState.gameEnded} /></div>
       </div>
 
       <section className="njuka-table relative h-[68vh] min-h-[470px] w-full max-w-[1180px]">
@@ -116,7 +113,7 @@ export const MultiplayerTable = ({
               </div>
             ))}
           </div>
-          {canDiscard && <Button onClick={() => selectedCardIndex !== null && onDiscard(selectedCardIndex)} disabled={selectedCardIndex === null} className="mt-2 bg-gradient-gold text-background">Discard selected card</Button>}
+          {canDiscard && <div className="mt-2 flex flex-wrap justify-center gap-2"><Button onClick={() => selectedCardIndex !== null && onDiscard(selectedCardIndex)} disabled={selectedCardIndex === null} className="bg-gradient-gold text-background">Discard selected card</Button>{specialPairs.map(option => <Button key={`${option.type}-${option.indices.join('-')}`} variant="outline" onClick={() => onSpecialDiscard(option)} className="border-gold/60 text-gold">{option.type === 'less' ? 'Less' : 'Bunx'}: {option.cards[0].rank}, {option.cards[1].rank}</Button>)}</div>}
         </div>
       </section>
     </main>

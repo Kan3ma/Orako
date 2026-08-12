@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, Player, GameState } from '@/types/game';
-import { createDeck, dealInitialCards, canUseCardToWin } from '@/utils/gameLogic';
+import { createDeck, dealInitialCards, canUseCardToWin, shuffleDeck, getSpecialPairOptions, SpecialPairOption } from '@/utils/gameLogic';
 import { makeAIDecision, getAIPlayerDelay } from '@/utils/aiLogic';
 import { PlayingCard } from './PlayingCard';
 import { PlayerHand } from './PlayerHand';
 import { ComputerTable } from './ComputerTable';
 import { MultiplayerTable } from './MultiplayerTable';
+import type { NjukaSettings } from './GameSettingsDialog';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -32,6 +33,9 @@ interface GameRoom {
   player_ids?: string[];
   player_names?: string[];
   end_condition?: 'first_winner' | 'last_two';
+  njuka_settings?: NjukaSettings;
+  pending_njuka_settings?: NjukaSettings;
+  pending_end_condition?: 'first_winner' | 'last_two';
 }
 
 interface GameBoardProps {
@@ -46,9 +50,10 @@ interface GameBoardProps {
   localPlayerIndex?: number;
   onUpdateGameState?: (gameState: GameState, nextTurn: number) => void;
   onUpdateEndCondition?: (condition: 'first_winner' | 'last_two') => void;
+  onUpdateNjukaSettings?: (settings: NjukaSettings) => void;
 }
 
-export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChangeOpponents, isMultiplayer = false, room, isHost, localPlayerIndex: multiplayerPlayerIndex, onUpdateGameState, onUpdateEndCondition }: GameBoardProps) => {
+export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChangeOpponents, isMultiplayer = false, room, isHost, localPlayerIndex: multiplayerPlayerIndex, onUpdateGameState, onUpdateEndCondition, onUpdateNjukaSettings }: GameBoardProps) => {
   const [gameState, setGameState] = useState<GameState>({
     players: [],
     deck: [],
@@ -62,8 +67,13 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChang
   });
 
   const [selectedCardIndex, setSelectedCardIndex] = useState<number | null>(null);
-  const [cardMotion, setCardMotion] = useState<{ key: number; kind: 'draw' | 'discard'; card?: Card; target: 'human' | 'ai' } | null>(null);
+  const [cardMotion, setCardMotion] = useState<{ key: number; kind: 'draw' | 'discard' | 'deal' | 'shuffle'; card?: Card; playerIndex: number } | null>(null);
   const [turnPauseUntil, setTurnPauseUntil] = useState(0);
+  const [isDealing, setIsDealing] = useState(false);
+  const [computerSettings, setComputerSettings] = useState<NjukaSettings>({ less: false, bunx: false, ponch: false, tenJackConsecutive: false });
+  const [nextComputerSettings, setNextComputerSettings] = useState<NjukaSettings>({ less: false, bunx: false, ponch: false, tenJackConsecutive: false });
+  const [aiSpeed, setAiSpeed] = useState<1 | 2 | 3>(1);
+  const motionTimerRef = useRef<number | null>(null);
   const localPlayerIndex = isMultiplayer ? Math.max(0, multiplayerPlayerIndex ?? (isHost ? 0 : 1)) : 0;
   const isLocalTurn = !isMultiplayer || gameState.currentPlayerIndex === localPlayerIndex;
 
@@ -89,6 +99,7 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChang
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
   const isComputerPlayer = (player: Player | undefined) => !isMultiplayer && !!player && player.id !== 'player-0';
   const turnPaused = !isMultiplayer && Date.now() < turnPauseUntil;
+  const activeTenJackRule = isMultiplayer ? !!room?.njuka_settings?.tenJackConsecutive : computerSettings.tenJackConsecutive;
 
   useEffect(() => {
     if (!turnPauseUntil) return;
@@ -101,9 +112,11 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChang
     return () => window.clearTimeout(timeoutId);
   }, [turnPauseUntil]);
 
-  const animateCard = (kind: 'draw' | 'discard', card?: Card, target: 'human' | 'ai' = 'human') => {
-    setCardMotion({ key: Date.now(), kind, card, target });
-    window.setTimeout(() => setCardMotion(null), 650);
+  const animateCard = (kind: 'draw' | 'discard' | 'deal' | 'shuffle', card?: Card, playerIndex = gameState.currentPlayerIndex) => {
+    setCardMotion({ key: Date.now(), kind, card, playerIndex });
+    if (motionTimerRef.current) window.clearTimeout(motionTimerRef.current);
+    const speed = isMultiplayer ? 1 : aiSpeed;
+    motionTimerRef.current = window.setTimeout(() => setCardMotion(null), (kind === 'shuffle' ? 900 : 650) / speed);
   };
 
   const getNextActivePlayerIndex = (playersToCheck: Player[], fromIndex: number) => {
@@ -116,8 +129,11 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChang
 
   const pauseBeforeNextTurn = (nextPlayerIndex: number, nextPlayers: Player[], discardedCard: Card) => {
     if (isMultiplayer) return;
-    const humanCanClaim = nextPlayerIndex === 0 && canUseCardToWin(nextPlayers[0].hand, discardedCard);
-    setTurnPauseUntil(Date.now() + (humanCanClaim ? 3000 : 2000));
+    if (nextPlayerIndex === 0) {
+      setTurnPauseUntil(0);
+      return;
+    }
+    setTurnPauseUntil(Date.now() + 2000 / aiSpeed);
   };
 
   const finishOrContinueMultiplayer = (state: GameState, winningPlayers: Player[], winnerIndex: number): GameState => {
@@ -158,14 +174,15 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChang
       currentPlayer,
       gameState.deck[gameState.deck.length - 1],
       gameState.lastDiscardedCard,
-      gameState.canClaim
-    );
+      gameState.canClaim,
+      activeTenJackRule
+    ) / aiSpeed;
     const timeoutId = setTimeout(() => {
-      const previewDecision = makeAIDecision(currentPlayer, gameState.deck.length, gameState.lastDiscardedCard, gameState.canClaim);
-      if (!isMultiplayer && previewDecision.action === 'draw') animateCard('draw', undefined, 'ai');
+      const previewDecision = makeAIDecision(currentPlayer, gameState.deck.length, gameState.lastDiscardedCard, gameState.canClaim, activeTenJackRule);
+      if (!isMultiplayer && previewDecision.action === 'draw') animateCard('draw', undefined, gameState.currentPlayerIndex);
       if (!isMultiplayer && previewDecision.action === 'discard' && previewDecision.cardIndex !== undefined) {
         const previewDiscard = currentPlayer.hand[previewDecision.cardIndex];
-        animateCard('discard', previewDiscard, 'ai');
+        animateCard('discard', previewDiscard, gameState.currentPlayerIndex);
         const previewNextIndex = getNextActivePlayerIndex(gameState.players, gameState.currentPlayerIndex);
         pauseBeforeNextTurn(previewNextIndex, gameState.players, previewDiscard);
       }
@@ -180,12 +197,13 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChang
           aiPlayer,
           prevState.deck.length,
           prevState.lastDiscardedCard,
-          prevState.canClaim
+          prevState.canClaim,
+          activeTenJackRule
         );
 
         // Handle AI decision with fresh state
         if (decision.action === 'claim' && prevState.canClaim && prevState.lastDiscardedCard) {
-          if (canUseCardToWin(aiPlayer.hand, prevState.lastDiscardedCard)) {
+          if (canUseCardToWin(aiPlayer.hand, prevState.lastDiscardedCard, activeTenJackRule)) {
             const updatedPlayers = [...prevState.players];
             updatedPlayers[prevState.currentPlayerIndex] = {
               ...aiPlayer,
@@ -209,9 +227,10 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChang
         if (decision.action === 'draw') {
           if (prevState.deck.length === 0) {
             // Reshuffle discard pile
+            if (!isMultiplayer) animateCard('shuffle', undefined, prevState.currentPlayerIndex);
             return {
               ...prevState,
-              deck: [...prevState.discardPile],
+              deck: shuffleDeck(prevState.discardPile),
               discardPile: []
             };
           }
@@ -219,7 +238,7 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChang
           const drawnCard = prevState.deck[prevState.deck.length - 1];
 
           // Check if drawing this card wins the game
-          if (canUseCardToWin(aiPlayer.hand, drawnCard)) {
+          if (canUseCardToWin(aiPlayer.hand, drawnCard, activeTenJackRule)) {
             const updatedPlayers = [...prevState.players];
             updatedPlayers[prevState.currentPlayerIndex] = {
               ...aiPlayer,
@@ -255,6 +274,19 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChang
         }
 
         if (decision.action === 'discard' && decision.cardIndex !== undefined) {
+          const specialOptions = !isMultiplayer ? getSpecialPairOptions(aiPlayer.hand, computerSettings.less, computerSettings.bunx, activeTenJackRule) : [];
+          if (specialOptions.length && prevState.deck.length) {
+            const option = specialOptions[Math.floor(Math.random() * specialOptions.length)];
+            const removedIds = new Set(option.cards.map(card => card.id));
+            const replacement = prevState.deck[prevState.deck.length - 1];
+            const nextPlayerIndex = getNextActivePlayerIndex(prevState.players, prevState.currentPlayerIndex);
+            const updatedPlayers = prevState.players.map((player, index) => index === prevState.currentPlayerIndex
+              ? { ...player, hand: [...player.hand.filter(card => !removedIds.has(card.id)), replacement], isCurrentTurn: false }
+              : { ...player, isCurrentTurn: index === nextPlayerIndex });
+            animateCard('discard', option.cards[0], prevState.currentPlayerIndex);
+            window.setTimeout(() => animateCard('draw', undefined, prevState.currentPlayerIndex), 350 / aiSpeed);
+            return { ...prevState, players: updatedPlayers, deck: prevState.deck.slice(0, -1), discardPile: [...prevState.discardPile, ...option.cards], currentPlayerIndex: nextPlayerIndex, lastDiscardedCard: null, canClaim: false };
+          }
           const discardedCard = aiPlayer.hand[decision.cardIndex];
           const newHand = aiPlayer.hand.filter((_, index) => index !== decision.cardIndex);
 
@@ -288,26 +320,37 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChang
     }, delay);
 
     return () => clearTimeout(timeoutId);
-  }, [gameState.currentPlayerIndex, gameState.gameStarted, gameState.gameEnded, gameState.deck.length, currentPlayer?.hand.length, isMultiplayer, onGameEnd, turnPaused]);
+  }, [gameState.currentPlayerIndex, gameState.gameStarted, gameState.gameEnded, gameState.deck.length, currentPlayer?.hand.length, isMultiplayer, onGameEnd, turnPaused, computerSettings.less, computerSettings.bunx, aiSpeed]);
 
   const initializeGame = () => {
     setTurnPauseUntil(0);
     const deck = createDeck();
+    const startingPlayerIndex = Math.floor(Math.random() * players.length);
+    if (!isMultiplayer) {
+      setGameState({
+        players: players.map((name, index) => ({ id: `player-${index}`, name, hand: [], isCurrentTurn: index === startingPlayerIndex, isWinner: false })),
+        deck, discardPile: [], currentPlayerIndex: startingPlayerIndex, gameStarted: false, gameEnded: false,
+        winner: null, lastDiscardedCard: null, canClaim: false,
+      });
+      return;
+    }
     const { playerHands, remainingDeck } = dealInitialCards(deck, players.length);
+    const openingCard = remainingDeck[remainingDeck.length - 1];
+    playerHands[startingPlayerIndex].push(openingCard);
     
     const gamePlayers: Player[] = players.map((name, index) => ({
       id: `player-${index}`,
       name,
       hand: playerHands[index],
-      isCurrentTurn: index === 0,
+      isCurrentTurn: index === startingPlayerIndex,
       isWinner: false
     }));
 
     const initialState: GameState = {
       players: gamePlayers,
-      deck: remainingDeck,
+      deck: remainingDeck.slice(0, -1),
       discardPile: [],
-      currentPlayerIndex: 0,
+      currentPlayerIndex: startingPlayerIndex,
       gameStarted: true,
       gameEnded: false,
       winner: null,
@@ -315,10 +358,34 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChang
       canClaim: false
     };
     setGameState(initialState);
-    if (isMultiplayer) void onUpdateGameState?.(initialState, 'host');
+    void onUpdateGameState?.(initialState, startingPlayerIndex);
   };
 
-  const saveState = (nextState: GameState, nextTurn?: 'host' | 'guest') => {
+  const startComputerGame = async () => {
+    if (isMultiplayer || gameState.gameStarted || !gameState.players.length) return;
+    setIsDealing(true);
+    setComputerSettings(nextComputerSettings);
+    let dealingDeck = createDeck();
+    const startingPlayerIndex = gameState.currentPlayerIndex;
+    animateCard('shuffle', undefined, startingPlayerIndex);
+    await new Promise(resolve => window.setTimeout(resolve, 900 / aiSpeed));
+    const dealTo = async (playerIndex: number) => {
+      const card = dealingDeck[dealingDeck.length - 1];
+      dealingDeck = dealingDeck.slice(0, -1);
+      animateCard('deal', undefined, playerIndex);
+      await new Promise(resolve => window.setTimeout(resolve, 500 / aiSpeed));
+      setGameState(previous => ({ ...previous, deck: dealingDeck, players: previous.players.map((player, index) => index === playerIndex ? { ...player, hand: [...player.hand, card] } : player) }));
+      await new Promise(resolve => window.setTimeout(resolve, 120 / aiSpeed));
+    };
+    for (let round = 0; round < 3; round += 1) {
+      for (let playerIndex = 0; playerIndex < gameState.players.length; playerIndex += 1) await dealTo(playerIndex);
+    }
+    await dealTo(startingPlayerIndex);
+    setGameState(previous => ({ ...previous, deck: dealingDeck, gameStarted: true }));
+    setIsDealing(false);
+  };
+
+  const saveState = (nextState: GameState, nextTurn?: number) => {
     setGameState(nextState);
     if (isMultiplayer) {
       const turn = nextTurn ?? nextState.currentPlayerIndex;
@@ -341,7 +408,8 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChang
 
     if (gameState.deck.length === 0) {
       // Reshuffle discard pile back into deck
-      const newDeck = [...gameState.discardPile];
+      if (!isMultiplayer) animateCard('shuffle', undefined, gameState.currentPlayerIndex);
+      const newDeck = shuffleDeck(gameState.discardPile);
       const nextState = {
         ...gameState,
         deck: newDeck,
@@ -352,10 +420,10 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChang
     }
 
     const drawnCard = gameState.deck[gameState.deck.length - 1];
-    animateCard('draw');
+    animateCard('draw', undefined, gameState.currentPlayerIndex);
     
     // Check if drawing this card wins the game
-    if (canUseCardToWin(currentPlayer.hand, drawnCard)) {
+    if (canUseCardToWin(currentPlayer.hand, drawnCard, activeTenJackRule)) {
       // Player wins!
       const updatedPlayers = [...gameState.players];
       updatedPlayers[gameState.currentPlayerIndex] = {
@@ -403,7 +471,7 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChang
 
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
     const discardedCard = currentPlayer.hand[cardIndex];
-    animateCard('discard', discardedCard);
+    animateCard('discard', discardedCard, gameState.currentPlayerIndex);
     
     // Remove card from player's hand
     const newHand = currentPlayer.hand.filter((_, index) => index !== cardIndex);
@@ -441,7 +509,7 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChang
     if (!gameState.canClaim || !gameState.lastDiscardedCard || (isMultiplayer && playerIndex !== localPlayerIndex)) return;
 
     const player = gameState.players[playerIndex];
-    if (canUseCardToWin(player.hand, gameState.lastDiscardedCard)) {
+    if (canUseCardToWin(player.hand, gameState.lastDiscardedCard, activeTenJackRule)) {
       const updatedPlayers = [...gameState.players];
       updatedPlayers[playerIndex] = {
         ...player,
@@ -459,6 +527,31 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChang
 
       if (!isMultiplayer || nextState.gameEnded) onGameEnd?.(player.name);
     }
+  };
+
+  const specialDiscard = (option: SpecialPairOption) => {
+    const playerIndex = isMultiplayer ? localPlayerIndex : 0;
+    if (gameState.gameEnded || gameState.currentPlayerIndex !== playerIndex || gameState.players[playerIndex].hand.length !== 4 || !gameState.deck.length) return;
+    const removedIds = new Set(option.cards.map(card => card.id));
+    const replacement = gameState.deck[gameState.deck.length - 1];
+    option.cards.forEach(card => animateCard('discard', card, playerIndex));
+    window.setTimeout(() => animateCard('draw', undefined, playerIndex), 350 / (isMultiplayer ? 1 : aiSpeed));
+    const nextState: GameState = {
+      ...gameState,
+      players: gameState.players.map((player, index) => index === playerIndex
+        ? { ...player, hand: [...player.hand.filter(card => !removedIds.has(card.id)), replacement], isCurrentTurn: false }
+        : player),
+      deck: gameState.deck.slice(0, -1),
+      discardPile: [...gameState.discardPile, ...option.cards],
+      lastDiscardedCard: null,
+      canClaim: false,
+    };
+    const nextPlayerIndex = getNextActivePlayerIndex(nextState.players, playerIndex);
+    nextState.currentPlayerIndex = nextPlayerIndex;
+    nextState.players = nextState.players.map((player, index) => ({ ...player, isCurrentTurn: index === nextPlayerIndex }));
+    if (!isMultiplayer && nextPlayerIndex !== 0) setTurnPauseUntil(Date.now() + 2000 / aiSpeed);
+    saveState(nextState);
+    setSelectedCardIndex(null);
   };
 
   return (
@@ -517,8 +610,19 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChang
           onDiscard={discardCard}
           onClaim={() => claimCard(0)}
           onRematch={onRematch ?? initializeGame}
+          onStart={startComputerGame}
           cardMotion={cardMotion}
           turnPaused={turnPaused}
+          isDealing={isDealing}
+          settings={nextComputerSettings}
+          onSettingsChange={settings => {
+            setNextComputerSettings(settings);
+            if (!gameState.gameStarted) setComputerSettings(settings);
+          }}
+          specialPairs={gameState.players[0] ? getSpecialPairOptions(gameState.players[0].hand, computerSettings.less, computerSettings.bunx, activeTenJackRule) : []}
+          onSpecialDiscard={specialDiscard}
+          aiSpeed={aiSpeed}
+          onCycleAiSpeed={() => setAiSpeed(speed => speed === 3 ? 1 : (speed + 1) as 1 | 2 | 3)}
         />
       ) : (
       <>
@@ -534,8 +638,12 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChang
           cardMotion={cardMotion}
           roomCode={room?.room_code ?? ''}
           isHost={!!isHost}
-          endCondition={room?.end_condition ?? 'first_winner'}
+          endCondition={room?.pending_end_condition ?? room?.end_condition ?? 'first_winner'}
           onUpdateEndCondition={onUpdateEndCondition}
+          settings={room?.pending_njuka_settings ?? room?.njuka_settings ?? { ponch: false, less: false, bunx: false, tenJackConsecutive: false }}
+          onSettingsChange={onUpdateNjukaSettings}
+          specialPairs={gameState.players[localPlayerIndex] ? getSpecialPairOptions(gameState.players[localPlayerIndex].hand, !!room?.njuka_settings?.less, !!room?.njuka_settings?.bunx, activeTenJackRule) : []}
+          onSpecialDiscard={specialDiscard}
         />
       <div className="hidden">
       <div className="max-w-7xl mx-auto">
@@ -629,7 +737,7 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChang
               onCardSelect={index === gameState.currentPlayerIndex && (!isMultiplayer || index === localPlayerIndex) && !isComputerPlayer(player) ? setSelectedCardIndex : undefined}
               selectedCardIndex={index === gameState.currentPlayerIndex && (!isMultiplayer || index === localPlayerIndex) && !isComputerPlayer(player) ? selectedCardIndex : null}
               onClaimCard={gameState.canClaim && (!isMultiplayer || index === localPlayerIndex) && !isComputerPlayer(player) ? () => claimCard(index) : undefined}
-              canClaim={gameState.canClaim && (!isMultiplayer || index === localPlayerIndex) && canUseCardToWin(player.hand, gameState.lastDiscardedCard!) && !isComputerPlayer(player)}
+              canClaim={gameState.canClaim && (!isMultiplayer || index === localPlayerIndex) && canUseCardToWin(player.hand, gameState.lastDiscardedCard!, activeTenJackRule) && !isComputerPlayer(player)}
             />
           ))}
         </div>

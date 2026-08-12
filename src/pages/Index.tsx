@@ -22,7 +22,7 @@ const Index = () => {
   const [playMode, setPlayMode] = useState<'computer' | 'friends' | null>(null);
   const [players, setPlayers] = useState<string[]>([]);
   
-  const { room, isHost, localPlayerIndex, loading, createRoom, joinRoom, updateGameState, updateRoomSettings, leaveRoom } = useMultiplayer();
+  const { room, isHost, localPlayerIndex, loading, createRoom, joinRoom, updateGameState, updateRoomSettings, updateNjukaSettings, leaveRoom } = useMultiplayer();
 
   useEffect(() => {
     if (gameMode !== 'multiplayer-game') return;
@@ -163,6 +163,7 @@ const Index = () => {
         localPlayerIndex={localPlayerIndex}
         onUpdateGameState={updateGameState}
         onUpdateEndCondition={updateRoomSettings}
+        onUpdateNjukaSettings={updateNjukaSettings}
       />
     );
   }

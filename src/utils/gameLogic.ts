@@ -36,7 +36,7 @@ export const getRankValue = (rank: Rank): number => {
   return rankValues[rank];
 };
 
-export const isConsecutive = (rank1: Rank, rank2: Rank): boolean => {
+export const isConsecutive = (rank1: Rank, rank2: Rank, tenJackConsecutive = false): boolean => {
   const val1 = getRankValue(rank1);
   const val2 = getRankValue(rank2);
   
@@ -47,11 +47,38 @@ export const isConsecutive = (rank1: Rank, rank2: Rank): boolean => {
   if ([11, 12, 13].includes(val1) && [11, 12, 13].includes(val2)) {
     return true;
   }
-  
-  return Math.abs(val1 - val2) === 1;
+
+  // The numeric run ends at 10. Ten and Jack do not connect.
+  if (val1 <= 10 && val2 <= 10) return Math.abs(val1 - val2) === 1;
+  if (tenJackConsecutive && ((val1 === 10 && val2 === 11) || (val1 === 11 && val2 === 10))) return true;
+  return false;
 };
 
-export const checkWinCondition = (hand: Card[]): WinCondition => {
+export interface SpecialPairOption {
+  indices: [number, number];
+  cards: [Card, Card];
+  type: 'less' | 'bunx';
+}
+
+export const getSpecialPairOptions = (hand: Card[], allowLess: boolean, allowBunx: boolean, tenJackConsecutive = false): SpecialPairOption[] => {
+  if (hand.length !== 4) return [];
+  const options: SpecialPairOption[] = [];
+  for (let first = 0; first < hand.length; first += 1) {
+    for (let second = first + 1; second < hand.length; second += 1) {
+      const type = hand[first].rank === hand[second].rank ? 'bunx' : isConsecutive(hand[first].rank, hand[second].rank, tenJackConsecutive) ? 'less' : null;
+      if (!type || (type === 'less' && !allowLess) || (type === 'bunx' && !allowBunx)) continue;
+      const other = [0, 1, 2, 3].filter(index => index !== first && index !== second);
+      const otherMatches = hand[other[0]].rank === hand[other[1]].rank;
+      const otherConsecutive = isConsecutive(hand[other[0]].rank, hand[other[1]].rank, tenJackConsecutive);
+      if ((type === 'less' && otherConsecutive) || (type === 'bunx' && otherMatches)) {
+        options.push({ indices: [first, second], cards: [hand[first], hand[second]], type });
+      }
+    }
+  }
+  return options;
+};
+
+export const checkWinCondition = (hand: Card[], tenJackConsecutive = false): WinCondition => {
   const result: WinCondition = {
     consecutivePair: [],
     matchingPair: [],
@@ -73,7 +100,7 @@ export const checkWinCondition = (hand: Card[]): WinCondition => {
     const pair2 = [hand[pairing[1][0]], hand[pairing[1][1]]];
 
     // Check if pair1 is matching and pair2 is consecutive
-    if (pair1[0].rank === pair1[1].rank && isConsecutive(pair2[0].rank, pair2[1].rank)) {
+    if (pair1[0].rank === pair1[1].rank && isConsecutive(pair2[0].rank, pair2[1].rank, tenJackConsecutive)) {
       result.matchingPair = pair1;
       result.consecutivePair = pair2;
       result.isWinning = true;
@@ -81,7 +108,7 @@ export const checkWinCondition = (hand: Card[]): WinCondition => {
     }
 
     // Check if pair2 is matching and pair1 is consecutive
-    if (pair2[0].rank === pair2[1].rank && isConsecutive(pair1[0].rank, pair1[1].rank)) {
+    if (pair2[0].rank === pair2[1].rank && isConsecutive(pair1[0].rank, pair1[1].rank, tenJackConsecutive)) {
       result.matchingPair = pair2;
       result.consecutivePair = pair1;
       result.isWinning = true;
@@ -92,9 +119,9 @@ export const checkWinCondition = (hand: Card[]): WinCondition => {
   return result;
 };
 
-export const canUseCardToWin = (hand: Card[], newCard: Card): boolean => {
+export const canUseCardToWin = (hand: Card[], newCard: Card, tenJackConsecutive = false): boolean => {
   const testHand = [...hand, newCard];
-  return checkWinCondition(testHand).isWinning;
+  return checkWinCondition(testHand, tenJackConsecutive).isWinning;
 };
 
 export const dealInitialCards = (deck: Card[], numPlayers: number): { playerHands: Card[][], remainingDeck: Card[] } => {

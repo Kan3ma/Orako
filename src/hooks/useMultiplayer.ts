@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database, Json } from '@/integrations/supabase/types';
 import type { GameState } from '@/types/game';
+import type { NjukaSettings } from '@/components/game/GameSettingsDialog';
 
 type RoomRow = Database['public']['Tables']['game_rooms']['Row'];
 
@@ -11,6 +12,9 @@ export interface GameRoom extends Omit<RoomRow, 'game_state' | 'status' | 'curre
   status: 'waiting' | 'playing' | 'finished';
   current_turn: string;
   end_condition: 'first_winner' | 'last_two';
+  njuka_settings: NjukaSettings;
+  pending_njuka_settings: NjukaSettings;
+  pending_end_condition: 'first_winner' | 'last_two';
 }
 
 const asRoom = (row: RoomRow): GameRoom => ({
@@ -19,6 +23,9 @@ const asRoom = (row: RoomRow): GameRoom => ({
   status: row.status as GameRoom['status'],
   current_turn: row.current_turn ?? '0',
   end_condition: row.end_condition as GameRoom['end_condition'],
+  njuka_settings: row.njuka_settings as unknown as NjukaSettings,
+  pending_njuka_settings: row.pending_njuka_settings as unknown as NjukaSettings,
+  pending_end_condition: row.pending_end_condition as GameRoom['pending_end_condition'],
 });
 
 const getPlayerId = async (): Promise<string> => {
@@ -154,16 +161,30 @@ export const useMultiplayer = () => {
         game_state: gameState as unknown as Json,
         current_turn: String(nextTurn),
         status: gameState.gameEnded ? 'finished' : 'playing',
+        ...(gameState.gameEnded ? {
+          njuka_settings: room.pending_njuka_settings as unknown as Json,
+          end_condition: room.pending_end_condition,
+        } : {}),
       })
       .eq('id', room.id);
     if (updateError) toast.error('The match could not be synchronized');
-  }, [room?.id]);
+  }, [room?.id, room?.pending_njuka_settings, room?.pending_end_condition]);
 
   const updateRoomSettings = useCallback(async (endCondition: 'first_winner' | 'last_two') => {
     if (!room?.id || !isHost) return;
-    const { error: updateError } = await supabase.from('game_rooms').update({ end_condition: endCondition }).eq('id', room.id);
+    const target = room.status === 'playing' ? { pending_end_condition: endCondition } : { end_condition: endCondition, pending_end_condition: endCondition };
+    const { error: updateError } = await supabase.from('game_rooms').update(target).eq('id', room.id);
     if (updateError) toast.error('Room settings could not be updated');
-  }, [room?.id, isHost]);
+  }, [room?.id, room?.status, isHost]);
+
+  const updateNjukaSettings = useCallback(async (settings: NjukaSettings) => {
+    if (!room?.id || !isHost) return;
+    const target = room.status === 'playing'
+      ? { pending_njuka_settings: settings as unknown as Json }
+      : { njuka_settings: settings as unknown as Json, pending_njuka_settings: settings as unknown as Json };
+    const { error: updateError } = await supabase.from('game_rooms').update(target).eq('id', room.id);
+    if (updateError) toast.error('Game settings could not be updated');
+  }, [room?.id, room?.status, isHost]);
 
   const leaveRoom = useCallback(async () => {
     if (!room?.id) return;
@@ -176,5 +197,5 @@ export const useMultiplayer = () => {
   }, [room?.id]);
 
   const localPlayerIndex = room && playerId ? room.player_ids.indexOf(playerId) : -1;
-  return { room, isHost, localPlayerIndex, loading, error, createRoom, joinRoom, updateGameState, updateRoomSettings, leaveRoom };
+  return { room, isHost, localPlayerIndex, loading, error, createRoom, joinRoom, updateGameState, updateRoomSettings, updateNjukaSettings, leaveRoom };
 };

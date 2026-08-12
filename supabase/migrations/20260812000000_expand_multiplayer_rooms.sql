@@ -2,7 +2,11 @@ ALTER TABLE public.game_rooms
   ADD COLUMN IF NOT EXISTS player_ids UUID[] NOT NULL DEFAULT '{}',
   ADD COLUMN IF NOT EXISTS player_names TEXT[] NOT NULL DEFAULT '{}',
   ADD COLUMN IF NOT EXISTS end_condition TEXT NOT NULL DEFAULT 'first_winner'
-    CHECK (end_condition IN ('first_winner', 'last_two'));
+    CHECK (end_condition IN ('first_winner', 'last_two')),
+  ADD COLUMN IF NOT EXISTS njuka_settings JSONB NOT NULL DEFAULT '{"ponch":false,"less":false,"bunx":false,"tenJackConsecutive":false}'::jsonb,
+  ADD COLUMN IF NOT EXISTS pending_njuka_settings JSONB NOT NULL DEFAULT '{"ponch":false,"less":false,"bunx":false,"tenJackConsecutive":false}'::jsonb,
+  ADD COLUMN IF NOT EXISTS pending_end_condition TEXT NOT NULL DEFAULT 'first_winner'
+    CHECK (pending_end_condition IN ('first_winner', 'last_two'));
 
 UPDATE public.game_rooms
 SET player_ids = ARRAY_REMOVE(ARRAY[host_id, guest_id], NULL),

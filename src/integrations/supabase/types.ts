@@ -27,6 +27,9 @@ export type Database = {
           player_ids: string[]
           player_names: string[]
           end_condition: string
+          njuka_settings: Json
+          pending_njuka_settings: Json
+          pending_end_condition: string
           room_code: string
           status: string
           updated_at: string
@@ -43,6 +46,9 @@ export type Database = {
           player_ids?: string[]
           player_names?: string[]
           end_condition?: string
+          njuka_settings?: Json
+          pending_njuka_settings?: Json
+          pending_end_condition?: string
           room_code: string
           status?: string
           updated_at?: string
@@ -59,6 +65,9 @@ export type Database = {
           player_ids?: string[]
           player_names?: string[]
           end_condition?: string
+          njuka_settings?: Json
+          pending_njuka_settings?: Json
+          pending_end_condition?: string
           room_code?: string
           status?: string
           updated_at?: string

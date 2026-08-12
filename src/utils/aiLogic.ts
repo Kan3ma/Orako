@@ -10,10 +10,11 @@ export const makeAIDecision = (
   player: Player,
   deckSize: number,
   lastDiscardedCard: Card | null,
-  canClaim: boolean
+  canClaim: boolean,
+  tenJackConsecutive = false
 ): AIDecision => {
   // First priority: Check if we can claim the last discarded card to win
-  if (canClaim && lastDiscardedCard && canUseCardToWin(player.hand, lastDiscardedCard)) {
+  if (canClaim && lastDiscardedCard && canUseCardToWin(player.hand, lastDiscardedCard, tenJackConsecutive)) {
     return { action: 'claim' };
   }
 
@@ -81,15 +82,15 @@ const calculateCardUsefulness = (card: Card, hand: Card[]): number => {
   return score;
 };
 
-export const isAIDrawCloseToWinning = (threeCardHand: Card[], drawnCard: Card): boolean => {
-  if (threeCardHand.length !== 3 || canUseCardToWin(threeCardHand, drawnCard)) return false;
+export const isAIDrawCloseToWinning = (threeCardHand: Card[], drawnCard: Card, tenJackConsecutive = false): boolean => {
+  if (threeCardHand.length !== 3 || canUseCardToWin(threeCardHand, drawnCard, tenJackConsecutive)) return false;
 
   const drawnValue = getRankValue(drawnCard.rank);
 
   for (let first = 0; first < threeCardHand.length; first += 1) {
     for (let second = first + 1; second < threeCardHand.length; second += 1) {
       const pairIsMatching = threeCardHand[first].rank === threeCardHand[second].rank;
-      const pairIsConsecutive = isConsecutive(threeCardHand[first].rank, threeCardHand[second].rank);
+      const pairIsConsecutive = isConsecutive(threeCardHand[first].rank, threeCardHand[second].rank, tenJackConsecutive);
       if (!pairIsMatching && !pairIsConsecutive) continue;
 
       const remainingIndex = [0, 1, 2].find(index => index !== first && index !== second)!;
@@ -116,14 +117,15 @@ export const getAIPlayerDelay = (
   player: Player,
   nextDeckCard?: Card,
   lastDiscardedCard?: Card | null,
-  canClaim = false
+  canClaim = false,
+  tenJackConsecutive = false
 ): number => {
   const canWinNow =
-    (canClaim && !!lastDiscardedCard && canUseCardToWin(player.hand, lastDiscardedCard)) ||
-    (player.hand.length === 3 && !!nextDeckCard && canUseCardToWin(player.hand, nextDeckCard));
+    (canClaim && !!lastDiscardedCard && canUseCardToWin(player.hand, lastDiscardedCard, tenJackConsecutive)) ||
+    (player.hand.length === 3 && !!nextDeckCard && canUseCardToWin(player.hand, nextDeckCard, tenJackConsecutive));
   const closeAfterDraw =
-    (player.hand.length === 3 && !!nextDeckCard && isAIDrawCloseToWinning(player.hand, nextDeckCard)) ||
-    (player.hand.length === 4 && isAIDrawCloseToWinning(player.hand.slice(0, 3), player.hand[3]));
+    (player.hand.length === 3 && !!nextDeckCard && isAIDrawCloseToWinning(player.hand, nextDeckCard, tenJackConsecutive)) ||
+    (player.hand.length === 4 && isAIDrawCloseToWinning(player.hand.slice(0, 3), player.hand[3], tenJackConsecutive));
 
   return canWinNow || closeAfterDraw ? 5000 : 3000;
 };
