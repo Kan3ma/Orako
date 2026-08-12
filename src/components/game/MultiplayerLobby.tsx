@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, Copy, ArrowLeft } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ArrowLeft, Copy, Users } from 'lucide-react';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 
 interface MultiplayerLobbyProps {
   room: {
@@ -21,6 +21,32 @@ interface MultiplayerLobbyProps {
   onBack: () => void;
 }
 
+interface LobbyPageProps {
+  children: React.ReactNode;
+  onBack: () => void;
+  backLabel?: string;
+}
+
+const LobbyPage = ({ children, onBack, backLabel = 'Back' }: LobbyPageProps) => (
+  <div className="relative min-h-screen bg-gradient-felt flex items-center justify-center p-4 pt-20 sm:pt-4">
+    <Button
+      type="button"
+      variant="outline"
+      onClick={onBack}
+      className="absolute left-4 top-4 gap-2 border-gold/50 bg-secondary/90 text-gold hover:border-gold hover:bg-gold hover:text-background sm:left-6 sm:top-6"
+    >
+      <ArrowLeft className="h-4 w-4" />
+      {backLabel}
+    </Button>
+    {children}
+  </div>
+);
+
+const lobbyCardClass = 'w-full max-w-md bg-secondary/95 backdrop-blur border-border shadow-deep';
+const primaryButtonClass = 'w-full bg-gradient-gold text-background hover:bg-gold-dim';
+const outlineButtonClass = 'w-full border-gold/50 text-gold hover:bg-gold hover:text-background';
+const inputClass = 'border-border bg-background/60 text-foreground placeholder:text-foreground/40 focus-visible:ring-gold';
+
 export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
   room,
   isHost,
@@ -29,11 +55,17 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
   onJoinRoom,
   onLeaveRoom,
   onStartGame,
-  onBack
+  onBack,
 }) => {
   const [mode, setMode] = useState<'select' | 'host' | 'join'>('select');
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
+
+  useEffect(() => {
+    if (room?.guest_name) {
+      onStartGame();
+    }
+  }, [room?.guest_name, onStartGame]);
 
   const handleCreateRoom = async () => {
     if (!playerName.trim()) {
@@ -52,194 +84,156 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
       toast.error('Please enter a valid 5-digit room code');
       return;
     }
-    const success = await onJoinRoom(roomCode, playerName);
-    if (success) {
-      onStartGame();
-    }
+    await onJoinRoom(roomCode, playerName);
   };
 
-  const copyRoomCode = () => {
+  const copyRoomCode = async () => {
     if (room?.room_code) {
-      navigator.clipboard.writeText(room.room_code);
+      await navigator.clipboard.writeText(room.room_code);
       toast.success('Room code copied!');
     }
   };
 
-  // Waiting room (host created room, waiting for guest)
   if (room && isHost && !room.guest_name) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-green-800 to-emerald-900 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md bg-emerald-800/90 border-amber-600/50">
+      <LobbyPage
+        onBack={() => {
+          onLeaveRoom();
+          setMode('select');
+        }}
+      >
+        <Card className={lobbyCardClass}>
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl text-amber-400 flex items-center justify-center gap-2">
-              <Users className="w-6 h-6" />
+            <CardTitle className="flex items-center justify-center gap-2 text-2xl text-gold">
+              <Users className="h-6 w-6" />
               Waiting for Player
             </CardTitle>
+            <CardDescription className="text-foreground/70">
+              Share the room code with your friend.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="text-center">
-              <p className="text-emerald-200 mb-2">Share this code with your friend:</p>
-              <div className="flex items-center justify-center gap-2">
-                <span className="text-4xl font-bold text-white tracking-widest bg-emerald-900/50 px-6 py-3 rounded-lg">
-                  {room.room_code}
-                </span>
-                <Button 
-                  variant="outline" 
-                  size="icon"
-                  onClick={copyRoomCode}
-                  className="border-amber-600/50 text-amber-400 hover:bg-amber-600/20"
-                >
-                  <Copy className="w-4 h-4" />
-                </Button>
-              </div>
+            <div className="flex items-center justify-center gap-2">
+              <span className="rounded-lg border border-gold/30 bg-background/60 px-6 py-3 text-4xl font-bold tracking-widest text-gold">
+                {room.room_code}
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={copyRoomCode}
+                aria-label="Copy room code"
+                className="border-gold/50 text-gold hover:bg-gold hover:text-background"
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
             </div>
-
-            <div className="flex items-center justify-center gap-2 text-emerald-300">
-              <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
-              <span>Waiting for opponent to join...</span>
+            <div className="flex items-center justify-center gap-2 text-foreground/70">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-gold" />
+              Waiting for opponent to join...
             </div>
-
-            <Button 
-              variant="outline" 
-              onClick={() => { onLeaveRoom(); setMode('select'); }}
-              className="w-full border-red-500/50 text-red-400 hover:bg-red-500/20"
-            >
-              Cancel
-            </Button>
           </CardContent>
         </Card>
-      </div>
+      </LobbyPage>
     );
   }
 
-  // Guest joined, start game
-  if (room && room.guest_name) {
-    onStartGame();
-    return null;
-  }
+  if (room?.guest_name) return null;
 
-  // Mode selection
   if (mode === 'select') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-green-800 to-emerald-900 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md bg-emerald-800/90 border-amber-600/50">
+      <LobbyPage onBack={onBack}>
+        <Card className={lobbyCardClass}>
           <CardHeader className="text-center">
-            <Button 
-              variant="ghost" 
-              onClick={onBack}
-              className="absolute left-4 top-4 text-emerald-200 hover:text-white"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <CardTitle className="text-2xl text-amber-400">
-              Multiplayer Mode
-            </CardTitle>
+            <CardTitle className="text-3xl text-gold">Multiplayer Mode</CardTitle>
+            <CardDescription className="text-foreground/70">
+              Create a private room or join a friend.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Button 
-              onClick={() => setMode('host')}
-              className="w-full h-16 text-lg bg-amber-600 hover:bg-amber-700 text-white"
-            >
+            <Button onClick={() => setMode('host')} className={`${primaryButtonClass} h-14 text-lg`}>
               Host a Game
             </Button>
-            <Button 
+            <Button
               onClick={() => setMode('join')}
               variant="outline"
-              className="w-full h-16 text-lg border-amber-600/50 text-amber-400 hover:bg-amber-600/20"
+              className={`${outlineButtonClass} h-14 text-lg`}
             >
               Join a Game
             </Button>
           </CardContent>
         </Card>
-      </div>
+      </LobbyPage>
     );
   }
 
-  // Host form
   if (mode === 'host') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-green-800 to-emerald-900 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md bg-emerald-800/90 border-amber-600/50">
+      <LobbyPage onBack={() => setMode('select')}>
+        <Card className={lobbyCardClass}>
           <CardHeader className="text-center">
-            <Button 
-              variant="ghost" 
-              onClick={() => setMode('select')}
-              className="absolute left-4 top-4 text-emerald-200 hover:text-white"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <CardTitle className="text-2xl text-amber-400">
-              Host a Game
-            </CardTitle>
+            <CardTitle className="text-2xl text-gold">Host a Game</CardTitle>
+            <CardDescription className="text-foreground/70">
+              Enter your name to create a private room.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-5">
             <div>
-              <label className="text-emerald-200 text-sm mb-2 block">Your Name</label>
-              <Input 
+              <label className="mb-2 block text-sm font-medium text-foreground/80">Your Name</label>
+              <Input
                 value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
+                onChange={(event) => setPlayerName(event.target.value)}
                 placeholder="Enter your name"
-                className="bg-emerald-900/50 border-emerald-600 text-white placeholder:text-emerald-400"
+                className={inputClass}
               />
             </div>
-            <Button 
-              onClick={handleCreateRoom}
-              disabled={loading}
-              className="w-full bg-amber-600 hover:bg-amber-700 text-white"
-            >
-              {loading ? 'Creating...' : 'Create Room'}
-            </Button>
+            <div className="pt-3">
+              <Button onClick={handleCreateRoom} disabled={loading} className={primaryButtonClass}>
+                {loading ? 'Creating...' : 'Create Room'}
+              </Button>
+            </div>
           </CardContent>
         </Card>
-      </div>
+      </LobbyPage>
     );
   }
 
-  // Join form
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-green-800 to-emerald-900 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md bg-emerald-800/90 border-amber-600/50">
+    <LobbyPage onBack={() => setMode('select')}>
+      <Card className={lobbyCardClass}>
         <CardHeader className="text-center">
-          <Button 
-            variant="ghost" 
-            onClick={() => setMode('select')}
-            className="absolute left-4 top-4 text-emerald-200 hover:text-white"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <CardTitle className="text-2xl text-amber-400">
-            Join a Game
-          </CardTitle>
+          <CardTitle className="text-2xl text-gold">Join a Game</CardTitle>
+          <CardDescription className="text-foreground/70">
+            Enter your name and your friend's room code.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-5">
           <div>
-            <label className="text-emerald-200 text-sm mb-2 block">Your Name</label>
-            <Input 
+            <label className="mb-2 block text-sm font-medium text-foreground/80">Your Name</label>
+            <Input
               value={playerName}
-              onChange={(e) => setPlayerName(e.target.value)}
+              onChange={(event) => setPlayerName(event.target.value)}
               placeholder="Enter your name"
-              className="bg-emerald-900/50 border-emerald-600 text-white placeholder:text-emerald-400"
+              className={inputClass}
             />
           </div>
           <div>
-            <label className="text-emerald-200 text-sm mb-2 block">Room Code</label>
-            <Input 
+            <label className="mb-2 block text-sm font-medium text-foreground/80">Room Code</label>
+            <Input
               value={roomCode}
-              onChange={(e) => setRoomCode(e.target.value.replace(/\D/g, '').slice(0, 5))}
+              onChange={(event) => setRoomCode(event.target.value.replace(/\D/g, '').slice(0, 5))}
               placeholder="Enter 5-digit code"
-              className="bg-emerald-900/50 border-emerald-600 text-white placeholder:text-emerald-400 text-center text-2xl tracking-widest"
+              className={`${inputClass} text-center text-2xl tracking-widest`}
               maxLength={5}
+              inputMode="numeric"
             />
           </div>
-          <Button 
-            onClick={handleJoinRoom}
-            disabled={loading}
-            className="w-full bg-amber-600 hover:bg-amber-700 text-white"
-          >
-            {loading ? 'Joining...' : 'Join Room'}
-          </Button>
+          <div className="pt-3">
+            <Button onClick={handleJoinRoom} disabled={loading} className={primaryButtonClass}>
+              {loading ? 'Joining...' : 'Join Room'}
+            </Button>
+          </div>
         </CardContent>
       </Card>
-    </div>
+    </LobbyPage>
   );
 };

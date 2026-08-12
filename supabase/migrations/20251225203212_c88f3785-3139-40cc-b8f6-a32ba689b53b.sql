@@ -1,60 +1,57 @@
--- Create game_rooms table for multiplayer
 CREATE TABLE public.game_rooms (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-  room_code TEXT NOT NULL UNIQUE,
-  host_name TEXT NOT NULL,
-  guest_name TEXT,
-  game_state JSONB DEFAULT '{}',
+  room_code TEXT NOT NULL UNIQUE CHECK (room_code ~ '^[0-9]{5}$'),
+  host_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  guest_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  host_name TEXT NOT NULL CHECK (char_length(host_name) BETWEEN 1 AND 30),
+  guest_name TEXT CHECK (guest_name IS NULL OR char_length(guest_name) BETWEEN 1 AND 30),
+  game_state JSONB,
   status TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting', 'playing', 'finished')),
-  current_turn TEXT DEFAULT 'host',
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+  current_turn TEXT NOT NULL DEFAULT 'host' CHECK (current_turn IN ('host', 'guest')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Enable Row Level Security
+CREATE INDEX game_rooms_host_id_idx ON public.game_rooms(host_id);
+CREATE INDEX game_rooms_guest_id_idx ON public.game_rooms(guest_id);
 ALTER TABLE public.game_rooms ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.game_rooms TO authenticated;
 
--- Allow anyone to view rooms (needed to join by code)
-CREATE POLICY "Anyone can view game rooms" 
-ON public.game_rooms 
-FOR SELECT 
-USING (true);
+CREATE POLICY "Players can view their room" ON public.game_rooms
+FOR SELECT TO authenticated
+USING ((SELECT auth.uid()) = host_id OR (SELECT auth.uid()) = guest_id);
 
--- Allow anyone to create rooms
-CREATE POLICY "Anyone can create game rooms" 
-ON public.game_rooms 
-FOR INSERT 
-WITH CHECK (true);
+CREATE POLICY "Players can create their own room" ON public.game_rooms
+FOR INSERT TO authenticated
+WITH CHECK ((SELECT auth.uid()) = host_id AND guest_id IS NULL AND status = 'waiting');
 
--- Allow anyone to update rooms (for joining and game moves)
-CREATE POLICY "Anyone can update game rooms" 
-ON public.game_rooms 
-FOR UPDATE 
-USING (true);
+CREATE POLICY "Players can update their room" ON public.game_rooms
+FOR UPDATE TO authenticated
+USING ((SELECT auth.uid()) = host_id OR (SELECT auth.uid()) = guest_id)
+WITH CHECK ((SELECT auth.uid()) = host_id OR (SELECT auth.uid()) = guest_id);
 
--- Allow anyone to delete rooms
-CREATE POLICY "Anyone can delete game rooms" 
-ON public.game_rooms 
-FOR DELETE 
-USING (true);
+CREATE POLICY "Hosts can delete their room" ON public.game_rooms
+FOR DELETE TO authenticated USING ((SELECT auth.uid()) = host_id);
 
--- Create function to update timestamps
-CREATE OR REPLACE FUNCTION public.update_updated_at_column()
-RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION public.join_game_room(join_code TEXT, player_name TEXT)
+RETURNS SETOF public.game_rooms LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  RETURN QUERY UPDATE public.game_rooms
+  SET guest_id = auth.uid(), guest_name = left(trim(player_name), 30), status = 'playing'
+  WHERE room_code = join_code AND guest_id IS NULL AND host_id <> auth.uid() AND status = 'waiting'
+  RETURNING *;
 END;
-$$ LANGUAGE plpgsql SET search_path = public;
+$$;
+REVOKE ALL ON FUNCTION public.join_game_room(TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.join_game_room(TEXT, TEXT) TO authenticated;
 
--- Create trigger for automatic timestamp updates
-CREATE TRIGGER update_game_rooms_updated_at
-BEFORE UPDATE ON public.game_rooms
-FOR EACH ROW
-EXECUTE FUNCTION public.update_updated_at_column();
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public AS $$
+BEGIN NEW.updated_at = now(); RETURN NEW; END;
+$$;
+CREATE TRIGGER update_game_rooms_updated_at BEFORE UPDATE ON public.game_rooms
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
--- Enable realtime for game_rooms
 ALTER TABLE public.game_rooms REPLICA IDENTITY FULL;
-
--- Add table to realtime publication
 ALTER PUBLICATION supabase_realtime ADD TABLE public.game_rooms;

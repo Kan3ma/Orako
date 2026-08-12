@@ -5,12 +5,23 @@ import { makeAIDecision, getAIPlayerDelay } from '@/utils/aiLogic';
 import { PlayingCard } from './PlayingCard';
 import { PlayerHand } from './PlayerHand';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
 interface GameRoom {
   id: string;
   room_code: string;
+  host_id?: string;
+  guest_id?: string | null;
   host_name: string;
   guest_name: string | null;
   game_state: GameState | null;
@@ -23,13 +34,14 @@ interface GameBoardProps {
   onGameEnd?: (winner: string) => void;
   onRematch?: () => void;
   onChangeMode?: () => void;
+  onChangeOpponents?: () => void;
   isMultiplayer?: boolean;
   room?: GameRoom | null;
   isHost?: boolean;
   onUpdateGameState?: (gameState: GameState, nextTurn: 'host' | 'guest') => void;
 }
 
-export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, isMultiplayer = false, room, isHost, onUpdateGameState }: GameBoardProps) => {
+export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, onChangeOpponents, isMultiplayer = false, room, isHost, onUpdateGameState }: GameBoardProps) => {
   const [gameState, setGameState] = useState<GameState>({
     players: [],
     deck: [],
@@ -43,10 +55,27 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, isMulti
   });
 
   const [selectedCardIndex, setSelectedCardIndex] = useState<number | null>(null);
+  const localPlayerIndex = isMultiplayer ? (isHost ? 0 : 1) : gameState.currentPlayerIndex;
+  const isLocalTurn = !isMultiplayer || gameState.currentPlayerIndex === localPlayerIndex;
 
   useEffect(() => {
+    if (isMultiplayer) {
+      if (room?.game_state?.players?.length) {
+        setGameState(room.game_state);
+      } else if (isHost && players.length === 2) {
+        initializeGame();
+      }
+      return;
+    }
     initializeGame();
-  }, [players]);
+  }, [players, isMultiplayer, isHost, room?.id]);
+
+  useEffect(() => {
+    if (isMultiplayer && room?.game_state?.players?.length) {
+      setGameState(room.game_state);
+      setSelectedCardIndex(null);
+    }
+  }, [isMultiplayer, room?.game_state]);
 
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
 
@@ -247,7 +276,7 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, isMulti
       isWinner: false
     }));
 
-    setGameState({
+    const initialState: GameState = {
       players: gamePlayers,
       deck: remainingDeck,
       discardPile: [],
@@ -257,10 +286,21 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, isMulti
       winner: null,
       lastDiscardedCard: null,
       canClaim: false
-    });
+    };
+    setGameState(initialState);
+    if (isMultiplayer) void onUpdateGameState?.(initialState, 'host');
+  };
+
+  const saveState = (nextState: GameState, nextTurn?: 'host' | 'guest') => {
+    setGameState(nextState);
+    if (isMultiplayer) {
+      const turn = nextTurn ?? (nextState.currentPlayerIndex === 0 ? 'host' : 'guest');
+      void onUpdateGameState?.(nextState, turn);
+    }
   };
 
   const drawCard = () => {
+    if (!isLocalTurn || gameState.gameEnded) return;
     // Don't allow drawing if player already has 4 cards
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
     if (currentPlayer.hand.length >= 4) {
@@ -275,11 +315,12 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, isMulti
     if (gameState.deck.length === 0) {
       // Reshuffle discard pile back into deck
       const newDeck = [...gameState.discardPile];
-      setGameState(prev => ({
-        ...prev,
+      const nextState = {
+        ...gameState,
         deck: newDeck,
         discardPile: []
-      }));
+      };
+      saveState(nextState);
       return;
     }
 
@@ -295,14 +336,15 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, isMulti
         isWinner: true
       };
 
-      setGameState(prev => ({
-        ...prev,
+      const nextState: GameState = {
+        ...gameState,
         players: updatedPlayers,
-        deck: prev.deck.slice(0, -1),
+        deck: gameState.deck.slice(0, -1),
         gameEnded: true,
         winner: updatedPlayers[gameState.currentPlayerIndex],
         canClaim: false
-      }));
+      };
+      saveState(nextState);
 
       toast({
         title: "🎉 Game Won!",
@@ -320,16 +362,17 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, isMulti
       hand: [...currentPlayer.hand, drawnCard]
     };
 
-    setGameState(prev => ({
-      ...prev,
+    const nextState: GameState = {
+      ...gameState,
       players: updatedPlayers,
-      deck: prev.deck.slice(0, -1),
+      deck: gameState.deck.slice(0, -1),
       canClaim: false
-    }));
+    };
+    saveState(nextState);
   };
 
   const discardCard = (cardIndex: number) => {
-    if (selectedCardIndex === null) return;
+    if (selectedCardIndex === null || !isLocalTurn || gameState.gameEnded) return;
 
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
     const discardedCard = currentPlayer.hand[cardIndex];
@@ -351,21 +394,22 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, isMulti
       isCurrentTurn: true
     };
 
-    setGameState(prev => ({
-      ...prev,
+    const nextState: GameState = {
+      ...gameState,
       players: updatedPlayers,
-      discardPile: [...prev.discardPile, discardedCard],
+      discardPile: [...gameState.discardPile, discardedCard],
       currentPlayerIndex: nextPlayerIndex,
       lastDiscardedCard: discardedCard,
       canClaim: true
-    }));
+    };
+    saveState(nextState, nextPlayerIndex === 0 ? 'host' : 'guest');
 
     setSelectedCardIndex(null);
     // Claim window closes when next player draws from deck, not by timeout
   };
 
   const claimCard = (playerIndex: number) => {
-    if (!gameState.canClaim || !gameState.lastDiscardedCard) return;
+    if (!gameState.canClaim || !gameState.lastDiscardedCard || (isMultiplayer && playerIndex !== localPlayerIndex)) return;
 
     const player = gameState.players[playerIndex];
     if (canUseCardToWin(player.hand, gameState.lastDiscardedCard)) {
@@ -376,13 +420,14 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, isMulti
         isWinner: true
       };
 
-      setGameState(prev => ({
-        ...prev,
+      const nextState: GameState = {
+        ...gameState,
         players: updatedPlayers,
         gameEnded: true,
         winner: updatedPlayers[playerIndex],
         canClaim: false
-      }));
+      };
+      saveState(nextState);
 
       toast({
         title: "🎉 Claimed Victory!",
@@ -394,13 +439,58 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, isMulti
   };
 
   return (
-    <div className="min-h-screen bg-gradient-felt p-4">
+    <div className="relative min-h-screen bg-gradient-felt p-4 pt-20 sm:pt-4">
+      <Dialog>
+        <DialogTrigger asChild>
+          <Button
+            variant="outline"
+            className="absolute left-4 top-4 border-gold/50 bg-secondary/90 text-gold hover:border-gold hover:bg-gold hover:text-background sm:left-6 sm:top-6"
+          >
+            Leave
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="border-border bg-secondary text-foreground sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-2xl text-gold">Leave this match?</DialogTitle>
+            <DialogDescription className="text-foreground/70">
+              Choose where you would like to go next.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 pt-2">
+            <DialogClose asChild>
+              <Button onClick={onChangeMode} className="bg-gradient-gold text-background">
+                Return to game mode selection
+              </Button>
+            </DialogClose>
+            {!isMultiplayer && (
+              <DialogClose asChild>
+                <Button
+                  variant="outline"
+                  onClick={onChangeOpponents}
+                  className="border-gold/50 text-gold hover:bg-gold hover:text-background"
+                >
+                  Change number of AI opponents
+                </Button>
+              </DialogClose>
+            )}
+            <DialogClose asChild>
+              <Button
+                variant="outline"
+                onClick={isMultiplayer ? initializeGame : (onRematch ?? initializeGame)}
+                className="border-gold/50 text-gold hover:bg-gold hover:text-background"
+              >
+                Restart game
+              </Button>
+            </DialogClose>
+          </div>
+        </DialogContent>
+      </Dialog>
       <div className="max-w-7xl mx-auto">
         {/* Game Over Options */}
         {gameState.gameEnded && (
           <div className="flex justify-center gap-4 mb-6">
             <Button 
-              onClick={onRematch}
+              onClick={isMultiplayer ? initializeGame : onRematch}
               className="bg-gradient-gold hover:bg-gold-dim text-background"
             >
               Rematch
@@ -433,8 +523,8 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, isMulti
             <p className="text-white/80 mb-2 font-medium">Deck ({gameState.deck.length})</p>
             <PlayingCard 
               isFlipped 
-              onClick={currentPlayer?.isCurrentTurn && !currentPlayer.name.includes('AI Player') ? drawCard : undefined}
-              className={currentPlayer?.isCurrentTurn && !currentPlayer.name.includes('AI Player') ? "hover:shadow-gold cursor-pointer" : "cursor-not-allowed opacity-50"}
+              onClick={currentPlayer?.isCurrentTurn && isLocalTurn && !currentPlayer.name.includes('AI Player') ? drawCard : undefined}
+              className={currentPlayer?.isCurrentTurn && isLocalTurn && !currentPlayer.name.includes('AI Player') ? "hover:shadow-gold cursor-pointer" : "cursor-not-allowed opacity-50"}
               size="lg"
             />
           </div>
@@ -454,7 +544,7 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, isMulti
         </div>
 
         {/* Current Player Actions */}
-        {currentPlayer?.isCurrentTurn && currentPlayer.hand.length > 3 && !currentPlayer.name.includes('AI Player') && (
+        {currentPlayer?.isCurrentTurn && isLocalTurn && currentPlayer.hand.length > 3 && !currentPlayer.name.includes('AI Player') && (
           <div className="text-center mb-6">
             <p className="text-white font-medium mb-4">Select a card to discard:</p>
             <Button 
@@ -481,26 +571,16 @@ export const GameBoard = ({ players, onGameEnd, onRematch, onChangeMode, isMulti
               key={player.id}
               player={player}
               isCurrentPlayer={index === gameState.currentPlayerIndex}
-              onCardSelect={index === gameState.currentPlayerIndex && !player.name.includes('AI Player') ? setSelectedCardIndex : undefined}
-              selectedCardIndex={index === gameState.currentPlayerIndex && !player.name.includes('AI Player') ? selectedCardIndex : null}
-              onClaimCard={gameState.canClaim && !player.name.includes('AI Player') ? () => claimCard(index) : undefined}
-              canClaim={gameState.canClaim && canUseCardToWin(player.hand, gameState.lastDiscardedCard!) && !player.name.includes('AI Player')}
+              isLocalPlayer={!isMultiplayer || index === localPlayerIndex}
+              hideCards={isMultiplayer && index !== localPlayerIndex}
+              onCardSelect={index === gameState.currentPlayerIndex && (!isMultiplayer || index === localPlayerIndex) && !player.name.includes('AI Player') ? setSelectedCardIndex : undefined}
+              selectedCardIndex={index === gameState.currentPlayerIndex && (!isMultiplayer || index === localPlayerIndex) && !player.name.includes('AI Player') ? selectedCardIndex : null}
+              onClaimCard={gameState.canClaim && (!isMultiplayer || index === localPlayerIndex) && !player.name.includes('AI Player') ? () => claimCard(index) : undefined}
+              canClaim={gameState.canClaim && (!isMultiplayer || index === localPlayerIndex) && canUseCardToWin(player.hand, gameState.lastDiscardedCard!) && !player.name.includes('AI Player')}
             />
           ))}
         </div>
 
-        {/* Game Controls */}
-        {!gameState.gameEnded && (
-          <div className="text-center mt-8">
-            <Button 
-              onClick={initializeGame}
-              variant="outline"
-              className="border-gold text-gold hover:bg-gold hover:text-background"
-            >
-              New Game
-            </Button>
-          </div>
-        )}
       </div>
     </div>
   );

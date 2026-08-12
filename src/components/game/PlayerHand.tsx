@@ -7,6 +7,8 @@ import { cn } from '@/lib/utils';
 interface PlayerHandProps {
   player: Player;
   isCurrentPlayer: boolean;
+  isLocalPlayer?: boolean;
+  hideCards?: boolean;
   onCardSelect?: (index: number) => void;
   selectedCardIndex?: number | null;
   onClaimCard?: () => void;
@@ -16,6 +18,8 @@ interface PlayerHandProps {
 export const PlayerHand = ({ 
   player, 
   isCurrentPlayer, 
+  isLocalPlayer = true,
+  hideCards = false,
   onCardSelect, 
   selectedCardIndex,
   onClaimCard,
@@ -39,7 +43,7 @@ export const PlayerHand = ({
         )}>
           {player.name}
           {player.isWinner && " 🏆"}
-          {isCurrentPlayer && !player.isWinner && " (Your Turn)"}
+          {isCurrentPlayer && !player.isWinner && (isLocalPlayer ? " (Your Turn)" : " (Their Turn)")}
         </h3>
         
         {canClaim && onClaimCard && (
@@ -63,6 +67,7 @@ export const PlayerHand = ({
           >
             <PlayingCard
               card={card}
+              isFlipped={hideCards}
               onClick={() => onCardSelect?.(index)}
               canSelect={isCurrentPlayer && !!onCardSelect}
               isSelected={selectedCardIndex === index}
@@ -72,7 +77,7 @@ export const PlayerHand = ({
       </div>
 
       {/* Win Condition Display */}
-      {winCondition.isWinning && (
+      {!hideCards && winCondition.isWinning && (
         <div className="bg-green-500/20 border border-green-500 rounded-lg p-3">
           <p className="text-green-400 font-semibold mb-2">🎉 Winning Hand!</p>
           <div className="flex gap-4 text-sm">

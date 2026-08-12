@@ -19,7 +19,9 @@ export type Database = {
           created_at: string
           current_turn: string | null
           game_state: Json | null
+          guest_id: string | null
           guest_name: string | null
+          host_id: string
           host_name: string
           id: string
           room_code: string
@@ -30,7 +32,9 @@ export type Database = {
           created_at?: string
           current_turn?: string | null
           game_state?: Json | null
+          guest_id?: string | null
           guest_name?: string | null
+          host_id: string
           host_name: string
           id?: string
           room_code: string
@@ -41,7 +45,9 @@ export type Database = {
           created_at?: string
           current_turn?: string | null
           game_state?: Json | null
+          guest_id?: string | null
           guest_name?: string | null
+          host_id?: string
           host_name?: string
           id?: string
           room_code?: string
@@ -55,7 +61,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      join_game_room: {
+        Args: { join_code: string; player_name: string }
+        Returns: Database["public"]["Tables"]["game_rooms"]["Row"][]
+      }
     }
     Enums: {
       [_ in never]: never

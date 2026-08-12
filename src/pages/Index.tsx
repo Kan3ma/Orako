@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { GameModeSelection } from '@/components/game/GameModeSelection';
 import { GameSetup } from '@/components/game/GameSetup';
 import { GameBoard } from '@/components/game/GameBoard';
+import { ComputerSetup } from '@/components/game/ComputerSetup';
 import { MultiplayerLobby } from '@/components/game/MultiplayerLobby';
 import { useMultiplayer } from '@/hooks/useMultiplayer';
 
 const Index = () => {
-  const [gameMode, setGameMode] = useState<'selection' | 'setup' | 'game' | 'multiplayer-lobby' | 'multiplayer-game'>('selection');
+  const [gameMode, setGameMode] = useState<'selection' | 'computer-setup' | 'setup' | 'game' | 'multiplayer-lobby' | 'multiplayer-game'>('selection');
   const [playMode, setPlayMode] = useState<'computer' | 'friends' | null>(null);
   const [players, setPlayers] = useState<string[]>([]);
   
@@ -24,12 +25,18 @@ const Index = () => {
     setGameMode('multiplayer-lobby');
   };
 
+  const handleChangeOpponents = () => {
+    setPlayers([]);
+    setPlayMode(null);
+    setGameMode('computer-setup');
+  };
+
   const handleStartGame = (playerNames: string[]) => {
     setPlayers(playerNames);
     setGameMode('game');
   };
 
-  const handleMultiplayerStart = () => {
+  const handleMultiplayerStart = useCallback(() => {
     if (room) {
       const playerNames = isHost 
         ? [room.host_name, room.guest_name || 'Waiting...']
@@ -37,7 +44,7 @@ const Index = () => {
       setPlayers(playerNames);
       setGameMode('multiplayer-game');
     }
-  };
+  }, [room, isHost]);
 
   const handleGameEnd = (winner: string) => {
     console.log('Game won by:', winner);
@@ -91,6 +98,15 @@ const Index = () => {
     );
   }
 
+  if (gameMode === 'computer-setup') {
+    return (
+      <ComputerSetup
+        onStartGame={handlePlayComputer}
+        onBack={() => setGameMode('selection')}
+      />
+    );
+  }
+
   if (gameMode === 'setup') {
     return <GameSetup onStartGame={handleStartGame} />;
   }
@@ -116,6 +132,7 @@ const Index = () => {
       onGameEnd={handleGameEnd} 
       onRematch={handleRematch}
       onChangeMode={handleChangeMode}
+      onChangeOpponents={handleChangeOpponents}
     />
   );
 };
