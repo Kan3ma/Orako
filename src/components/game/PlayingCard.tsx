@@ -7,7 +7,7 @@ interface PlayingCardProps {
   isFlipped?: boolean;
   onClick?: () => void;
   className?: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'ai' | 'md' | 'lg';
   canSelect?: boolean;
   isSelected?: boolean;
 }
@@ -23,6 +23,7 @@ export const PlayingCard = ({
 }: PlayingCardProps) => {
   const sizeClasses = {
     sm: 'w-12 h-16 text-xs',
+    ai: 'w-14 h-20 text-sm',
     md: 'w-16 h-24 text-sm',
     lg: 'w-20 h-32 text-base'
   };

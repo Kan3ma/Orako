@@ -9,14 +9,16 @@ type RoomRow = Database['public']['Tables']['game_rooms']['Row'];
 export interface GameRoom extends Omit<RoomRow, 'game_state' | 'status' | 'current_turn'> {
   game_state: GameState | null;
   status: 'waiting' | 'playing' | 'finished';
-  current_turn: 'host' | 'guest';
+  current_turn: string;
+  end_condition: 'first_winner' | 'last_two';
 }
 
 const asRoom = (row: RoomRow): GameRoom => ({
   ...row,
   game_state: row.game_state as unknown as GameState | null,
   status: row.status as GameRoom['status'],
-  current_turn: row.current_turn as GameRoom['current_turn'],
+  current_turn: row.current_turn ?? '0',
+  end_condition: row.end_condition as GameRoom['end_condition'],
 });
 
 const getPlayerId = async (): Promise<string> => {
@@ -34,6 +36,7 @@ export const useMultiplayer = () => {
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [isHost, setIsHost] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [playerId, setPlayerId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,7 +49,9 @@ export const useMultiplayer = () => {
         .eq('id', room.id)
         .maybeSingle();
       if (data) {
-        setRoom(asRoom(data));
+        const refreshedRoom = asRoom(data);
+        setRoom(refreshedRoom);
+        if (playerId) setIsHost(refreshedRoom.host_id === playerId);
       } else if (!refreshError) {
         setRoom(null);
         setIsHost(false);
@@ -63,7 +68,9 @@ export const useMultiplayer = () => {
             setRoom(null);
             setIsHost(false);
           } else {
-            setRoom(asRoom(payload.new as RoomRow));
+            const updatedRoom = asRoom(payload.new as RoomRow);
+            setRoom(updatedRoom);
+            if (playerId) setIsHost(updatedRoom.host_id === playerId);
           }
         }
       )
@@ -75,18 +82,19 @@ export const useMultiplayer = () => {
       window.clearInterval(refreshTimer);
       void supabase.removeChannel(channel);
     };
-  }, [room?.id]);
+  }, [room?.id, playerId]);
 
   const createRoom = useCallback(async (hostName: string): Promise<string | null> => {
     setLoading(true);
     setError(null);
     try {
       const hostId = await getPlayerId();
+      setPlayerId(hostId);
       for (let attempt = 0; attempt < 5; attempt += 1) {
         const roomCode = generateRoomCode();
         const { data, error: insertError } = await supabase
           .from('game_rooms')
-          .insert({ room_code: roomCode, host_id: hostId, host_name: hostName.trim(), status: 'waiting' })
+          .insert({ room_code: roomCode, host_id: hostId, host_name: hostName.trim(), player_ids: [hostId], player_names: [hostName.trim()], status: 'waiting', current_turn: '0' })
           .select()
           .single();
 
@@ -113,7 +121,8 @@ export const useMultiplayer = () => {
     setLoading(true);
     setError(null);
     try {
-      await getPlayerId();
+      const joiningPlayerId = await getPlayerId();
+      setPlayerId(joiningPlayerId);
       const { data, error: joinError } = await supabase.rpc('join_game_room', {
         join_code: roomCode,
         player_name: guestName.trim(),
@@ -137,32 +146,35 @@ export const useMultiplayer = () => {
     }
   }, []);
 
-  const updateGameState = useCallback(async (gameState: GameState, nextTurn: 'host' | 'guest') => {
+  const updateGameState = useCallback(async (gameState: GameState, nextTurn: number) => {
     if (!room?.id) return;
     const { error: updateError } = await supabase
       .from('game_rooms')
       .update({
         game_state: gameState as unknown as Json,
-        current_turn: nextTurn,
+        current_turn: String(nextTurn),
         status: gameState.gameEnded ? 'finished' : 'playing',
       })
       .eq('id', room.id);
     if (updateError) toast.error('The match could not be synchronized');
   }, [room?.id]);
 
+  const updateRoomSettings = useCallback(async (endCondition: 'first_winner' | 'last_two') => {
+    if (!room?.id || !isHost) return;
+    const { error: updateError } = await supabase.from('game_rooms').update({ end_condition: endCondition }).eq('id', room.id);
+    if (updateError) toast.error('Room settings could not be updated');
+  }, [room?.id, isHost]);
+
   const leaveRoom = useCallback(async () => {
     if (!room?.id) return;
     try {
-      if (isHost) {
-        await supabase.from('game_rooms').delete().eq('id', room.id);
-      } else {
-        await supabase.rpc('leave_game_room', { target_room_id: room.id });
-      }
+      await supabase.rpc('leave_game_room', { target_room_id: room.id });
     } finally {
       setRoom(null);
       setIsHost(false);
     }
-  }, [room?.id, isHost]);
+  }, [room?.id]);
 
-  return { room, isHost, loading, error, createRoom, joinRoom, updateGameState, leaveRoom };
+  const localPlayerIndex = room && playerId ? room.player_ids.indexOf(playerId) : -1;
+  return { room, isHost, localPlayerIndex, loading, error, createRoom, joinRoom, updateGameState, updateRoomSettings, leaveRoom };
 };

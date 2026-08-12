@@ -33,7 +33,7 @@ export const ComputerSetup = ({ onStartGame, onBack }: ComputerSetupProps) => {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-4">
-            <Label className="text-lg font-semibold">Number of AI Players</Label>
+            <Label className="text-lg font-bold text-gold">Number of AI Players</Label>
             <div className="grid grid-cols-2 gap-2">
               {[1, 2, 3, 4].map((count) => (
                 <Button
@@ -41,7 +41,7 @@ export const ComputerSetup = ({ onStartGame, onBack }: ComputerSetupProps) => {
                   variant={aiPlayerCount === count ? 'default' : 'outline'}
                   onClick={() => setAiPlayerCount(count)}
                   className={cn(
-                    'h-12 text-lg',
+                    'h-12 text-lg font-bold tracking-wide text-foreground',
                     aiPlayerCount === count && 'bg-gradient-gold text-background'
                   )}
                 >
@@ -52,7 +52,7 @@ export const ComputerSetup = ({ onStartGame, onBack }: ComputerSetupProps) => {
           </div>
 
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onBack} className="flex-1">
+            <Button variant="outline" onClick={onBack} className="flex-1 border-gold/60 text-gold hover:bg-gold hover:text-background">
               Back
             </Button>
             <Button

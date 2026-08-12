@@ -1,5 +1,5 @@
 import { Card, Player } from '@/types/game';
-import { canUseCardToWin, checkWinCondition, getRankValue } from './gameLogic';
+import { canUseCardToWin, getRankValue, isConsecutive } from './gameLogic';
 
 export interface AIDecision {
   action: 'draw' | 'discard' | 'claim';
@@ -81,7 +81,49 @@ const calculateCardUsefulness = (card: Card, hand: Card[]): number => {
   return score;
 };
 
-export const getAIPlayerDelay = (): number => {
-  // Fixed delay of 5 seconds to simulate thinking
-  return 5000;
+export const isAIDrawCloseToWinning = (threeCardHand: Card[], drawnCard: Card): boolean => {
+  if (threeCardHand.length !== 3 || canUseCardToWin(threeCardHand, drawnCard)) return false;
+
+  const drawnValue = getRankValue(drawnCard.rank);
+
+  for (let first = 0; first < threeCardHand.length; first += 1) {
+    for (let second = first + 1; second < threeCardHand.length; second += 1) {
+      const pairIsMatching = threeCardHand[first].rank === threeCardHand[second].rank;
+      const pairIsConsecutive = isConsecutive(threeCardHand[first].rank, threeCardHand[second].rank);
+      if (!pairIsMatching && !pairIsConsecutive) continue;
+
+      const remainingIndex = [0, 1, 2].find(index => index !== first && index !== second)!;
+      const remainingValue = getRankValue(threeCardHand[remainingIndex].rank);
+
+      // A matching pair needs a consecutive partner for the remaining card.
+      // A near miss therefore lands on the same rank or two ranks away.
+      if (pairIsMatching && (drawnValue === remainingValue || Math.abs(drawnValue - remainingValue) === 2)) {
+        return true;
+      }
+
+      // A consecutive pair needs a match for the remaining card. One rank on
+      // either side of that card is considered close.
+      if (pairIsConsecutive && Math.abs(drawnValue - remainingValue) === 1) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+};
+
+export const getAIPlayerDelay = (
+  player: Player,
+  nextDeckCard?: Card,
+  lastDiscardedCard?: Card | null,
+  canClaim = false
+): number => {
+  const canWinNow =
+    (canClaim && !!lastDiscardedCard && canUseCardToWin(player.hand, lastDiscardedCard)) ||
+    (player.hand.length === 3 && !!nextDeckCard && canUseCardToWin(player.hand, nextDeckCard));
+  const closeAfterDraw =
+    (player.hand.length === 3 && !!nextDeckCard && isAIDrawCloseToWinning(player.hand, nextDeckCard)) ||
+    (player.hand.length === 4 && isAIDrawCloseToWinning(player.hand.slice(0, 3), player.hand[3]));
+
+  return canWinNow || closeAfterDraw ? 5000 : 3000;
 };

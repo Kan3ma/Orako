@@ -10,6 +10,8 @@ interface MultiplayerLobbyProps {
     room_code: string;
     host_name: string;
     guest_name: string | null;
+    player_names: string[];
+    end_condition: 'first_winner' | 'last_two';
     status: string;
   } | null;
   isHost: boolean;
@@ -18,6 +20,7 @@ interface MultiplayerLobbyProps {
   onJoinRoom: (code: string, name: string) => Promise<boolean>;
   onLeaveRoom: () => void;
   onStartGame: () => void;
+  onUpdateEndCondition: (condition: 'first_winner' | 'last_two') => void;
   onBack: () => void;
 }
 
@@ -55,6 +58,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
   onJoinRoom,
   onLeaveRoom,
   onStartGame,
+  onUpdateEndCondition,
   onBack,
 }) => {
   const [mode, setMode] = useState<'select' | 'host' | 'join'>('select');
@@ -62,10 +66,8 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
   const [roomCode, setRoomCode] = useState('');
 
   useEffect(() => {
-    if (room?.guest_name) {
-      onStartGame();
-    }
-  }, [room?.guest_name, onStartGame]);
+    if (room?.status === 'playing') onStartGame();
+  }, [room?.status, onStartGame]);
 
   const handleCreateRoom = async () => {
     if (!playerName.trim()) {
@@ -94,7 +96,7 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
     }
   };
 
-  if (room && isHost && !room.guest_name) {
+  if (room && isHost) {
     return (
       <LobbyPage
         onBack={() => {
@@ -106,10 +108,10 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
           <CardHeader className="text-center">
             <CardTitle className="flex items-center justify-center gap-2 text-2xl text-gold">
               <Users className="h-6 w-6" />
-              Waiting for Player
+              Multiplayer Room
             </CardTitle>
             <CardDescription className="text-foreground/70">
-              Share the room code with your friend.
+              Share the code and start when 2–6 players have joined.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -127,17 +129,40 @@ export const MultiplayerLobby: React.FC<MultiplayerLobbyProps> = ({
                 <Copy className="h-4 w-4" />
               </Button>
             </div>
-            <div className="flex items-center justify-center gap-2 text-foreground/70">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-gold" />
-              Waiting for opponent to join...
+            <div className="rounded-lg border border-border bg-background/40 p-3">
+              <p className="mb-2 font-bold text-gold">Players ({room.player_names.length}/6)</p>
+              {room.player_names.map((name, index) => <p key={`${name}-${index}`} className="text-foreground/80">{index + 1}. {name}{index === 0 ? ' (Host)' : ''}</p>)}
             </div>
+            <div>
+              <label className="mb-2 block text-sm font-bold text-foreground">End the game</label>
+              <select value={room.end_condition} onChange={event => onUpdateEndCondition(event.target.value as 'first_winner' | 'last_two')} className="w-full rounded-md border border-border bg-background/60 p-3 text-foreground">
+                <option value="first_winner">When the first player wins</option>
+                <option value="last_two">When only two active players remain</option>
+              </select>
+            </div>
+            <Button onClick={onStartGame} disabled={room.player_names.length < 2} className={primaryButtonClass}>Start Game</Button>
           </CardContent>
         </Card>
       </LobbyPage>
     );
   }
 
-  if (room?.guest_name) return null;
+  if (room && !isHost) {
+    return (
+      <LobbyPage onBack={onLeaveRoom}>
+        <Card className={lobbyCardClass}>
+          <CardHeader className="text-center"><CardTitle className="text-2xl text-gold">Waiting for Host</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-center text-foreground/70">
+              {room.status === 'playing' ? 'A round is in progress. You will be dealt in next round.' : `Players joined: ${room.player_names.length}/6`}
+            </p>
+            <p className="text-center font-bold text-gold">Room {room.room_code}</p>
+            {room.player_names.map((name, index) => <p key={`${name}-${index}`} className="text-foreground/80">{index + 1}. {name}</p>)}
+          </CardContent>
+        </Card>
+      </LobbyPage>
+    );
+  }
 
   if (mode === 'select') {
     return (

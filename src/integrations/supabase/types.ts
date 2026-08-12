@@ -24,6 +24,9 @@ export type Database = {
           host_id: string
           host_name: string
           id: string
+          player_ids: string[]
+          player_names: string[]
+          end_condition: string
           room_code: string
           status: string
           updated_at: string
@@ -37,6 +40,9 @@ export type Database = {
           host_id: string
           host_name: string
           id?: string
+          player_ids?: string[]
+          player_names?: string[]
+          end_condition?: string
           room_code: string
           status?: string
           updated_at?: string
@@ -50,6 +56,9 @@ export type Database = {
           host_id?: string
           host_name?: string
           id?: string
+          player_ids?: string[]
+          player_names?: string[]
+          end_condition?: string
           room_code?: string
           status?: string
           updated_at?: string
