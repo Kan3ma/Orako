@@ -65,6 +65,10 @@ export type Database = {
         Args: { join_code: string; player_name: string }
         Returns: Database["public"]["Tables"]["game_rooms"]["Row"][]
       }
+      leave_game_room: {
+        Args: { target_room_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

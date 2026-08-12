@@ -46,6 +46,17 @@ $$;
 REVOKE ALL ON FUNCTION public.join_game_room(TEXT, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.join_game_room(TEXT, TEXT) TO authenticated;
 
+CREATE OR REPLACE FUNCTION public.leave_game_room(target_room_id UUID)
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  UPDATE public.game_rooms
+  SET guest_id = NULL, guest_name = NULL, status = 'waiting', game_state = NULL, current_turn = 'host'
+  WHERE id = target_room_id AND guest_id = auth.uid();
+END;
+$$;
+REVOKE ALL ON FUNCTION public.leave_game_room(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.leave_game_room(UUID) TO authenticated;
+
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
 RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN NEW.updated_at = now(); RETURN NEW; END;

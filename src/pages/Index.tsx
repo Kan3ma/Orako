@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { GameModeSelection } from '@/components/game/GameModeSelection';
 import { GameSetup } from '@/components/game/GameSetup';
 import { GameBoard } from '@/components/game/GameBoard';
@@ -12,6 +13,24 @@ const Index = () => {
   const [players, setPlayers] = useState<string[]>([]);
   
   const { room, isHost, loading, createRoom, joinRoom, updateGameState, leaveRoom } = useMultiplayer();
+
+  useEffect(() => {
+    if (gameMode !== 'multiplayer-game') return;
+
+    if (!room) {
+      toast.info('The host closed the room.');
+      setPlayers([]);
+      setPlayMode(null);
+      setGameMode('selection');
+      return;
+    }
+
+    if (!room.guest_name) {
+      toast.info('Your opponent left the match. Waiting for another player.');
+      setPlayers([]);
+      setGameMode('multiplayer-lobby');
+    }
+  }, [gameMode, room]);
 
   const handlePlayComputer = (aiPlayers: number) => {
     const playerNames = ['You', ...Array.from({ length: aiPlayers }, (_, i) => `AI Player ${i + 1}`)];

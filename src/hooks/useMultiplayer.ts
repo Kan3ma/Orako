@@ -40,16 +40,32 @@ export const useMultiplayer = () => {
     if (!room?.id) return;
 
     const refreshRoom = async () => {
-      const { data } = await supabase.from('game_rooms').select().eq('id', room.id).maybeSingle();
-      if (data) setRoom(asRoom(data));
+      const { data, error: refreshError } = await supabase
+        .from('game_rooms')
+        .select()
+        .eq('id', room.id)
+        .maybeSingle();
+      if (data) {
+        setRoom(asRoom(data));
+      } else if (!refreshError) {
+        setRoom(null);
+        setIsHost(false);
+      }
     };
 
     const channel = supabase
       .channel(`room-${room.id}`)
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'game_rooms', filter: `id=eq.${room.id}` },
-        (payload) => setRoom(asRoom(payload.new as RoomRow))
+        { event: '*', schema: 'public', table: 'game_rooms', filter: `id=eq.${room.id}` },
+        (payload) => {
+          if (payload.eventType === 'DELETE') {
+            setRoom(null);
+            setIsHost(false);
+          } else {
+            setRoom(asRoom(payload.new as RoomRow));
+          }
+        }
       )
       .subscribe();
 
@@ -140,7 +156,7 @@ export const useMultiplayer = () => {
       if (isHost) {
         await supabase.from('game_rooms').delete().eq('id', room.id);
       } else {
-        await supabase.from('game_rooms').update({ guest_id: null, guest_name: null, status: 'waiting', game_state: null }).eq('id', room.id);
+        await supabase.rpc('leave_game_room', { target_room_id: room.id });
       }
     } finally {
       setRoom(null);
