@@ -210,3 +210,124 @@ All colors MUST be HSL.
   .njuka-card-draw-ai,
   .njuka-card-discard-ai { animation-duration: 1ms; }
 }
+
+@layer components {
+  .country-page {
+    color: hsl(210 45% 94%);
+    background:
+      radial-gradient(circle at 50% 0%, hsl(208 64% 25% / .9), transparent 48%),
+      linear-gradient(145deg, hsl(218 55% 9%), hsl(207 58% 14%));
+  }
+  .country-page .text-gold { color: hsl(194 92% 72%); }
+  .country-page .bg-gradient-gold { background: linear-gradient(135deg, hsl(197 88% 62%), hsl(218 82% 61%)); }
+  .country-page input,
+  .country-page select { color: hsl(210 45% 96%); }
+  .country-page option { color: white; background: hsl(215 45% 15%); }
+  .country-page label,
+  .country-page p,
+  .country-page th,
+  .country-page td { color: hsl(210 45% 94%); }
+  .country-page .space-y-4:has(> label select) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 1rem;
+  }
+  .country-page .space-y-4:has(> label select) > label:nth-child(-n+2) {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    margin: 0;
+    min-width: 0;
+    font-weight: 700;
+  }
+  .country-page .space-y-4:has(> label select) > label:nth-child(-n+2) select,
+  .country-page .space-y-4:has(> label select) > label:nth-child(-n+2) input {
+    flex: 1;
+    width: 100%;
+    margin-left: 0;
+    background: hsl(215 45% 12%);
+    border-color: hsl(197 65% 42% / .45);
+  }
+  .country-page .space-y-4:has(> label select) > :nth-child(n+3) { grid-column: 1 / -1; margin-top: 0; }
+  .country-page input[type="checkbox"] { accent-color: hsl(197 88% 62%); }
+  .country-letter-reveal { animation: country-letter-reveal .75s cubic-bezier(.2,.9,.25,1.2); }
+  .country-card {
+    border: 1px solid hsl(197 55% 45% / .35) !important;
+    background: hsl(207 48% 15%) !important;
+    color: hsl(210 45% 96%) !important;
+  }
+  .country-card p,
+  .country-card label,
+  .country-card th,
+  .country-card td,
+  .country-card span,
+  .country-card small {
+    color: hsl(210 45% 96%) !important;
+  }
+  .country-card .text-gold,
+  .country-card h1,
+  .country-card h2,
+  .country-card h3 {
+    color: hsl(194 92% 72%) !important;
+  }
+  .country-setup-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 1rem;
+  }
+  .country-setup-grid > label:not(.country-category) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: .75rem;
+    color: hsl(199 85% 86%);
+    font-weight: 700;
+  }
+  .country-setup-grid select,
+  .country-setup-grid input[type="number"] {
+    width: 100%;
+    min-height: 2.75rem;
+    border: 1px solid hsl(197 65% 55% / .3);
+    border-radius: .5rem;
+    background: hsl(216 50% 8%);
+    padding: .5rem .75rem;
+  }
+  .country-category {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    border: 0;
+    background: transparent;
+    padding: .25rem 0;
+    color: hsl(210 45% 96%) !important;
+  }
+  .country-setup-grid select:disabled,
+  .country-setup-grid input:disabled,
+  .country-category:has(input:disabled) {
+    opacity: 1;
+    color: hsl(210 45% 96%) !important;
+    -webkit-text-fill-color: hsl(210 45% 96%) !important;
+  }
+  .country-letter-reveal.is-shuffling {
+    animation: country-letter-shuffle .2s linear infinite;
+  }
+}
+
+@keyframes country-letter-reveal {
+  0% { opacity: 0; transform: rotateY(-180deg) scale(.5); filter: blur(12px); }
+  70% { opacity: 1; transform: rotateY(12deg) scale(1.08); filter: blur(0); }
+  100% { transform: rotateY(0) scale(1); }
+}
+
+@keyframes country-letter-shuffle {
+  0% { transform: rotate(-5deg) scale(.94); filter: blur(1px); }
+  50% { transform: rotate(5deg) scale(1.06); filter: blur(3px); }
+  100% { transform: rotate(-5deg) scale(.94); filter: blur(1px); }
+}
+
+@media (max-width: 560px) {
+  .country-page .space-y-4:has(> label select) { grid-template-columns: 1fr; }
+  .country-page .space-y-4:has(> label select) > * { grid-column: 1 !important; }
+  .country-setup-grid { grid-template-columns: 1fr; }
+  .country-setup-grid > * { grid-column: 1 !important; }
+}

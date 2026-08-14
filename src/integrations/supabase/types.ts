@@ -74,6 +74,12 @@ export type Database = {
         }
         Relationships: []
       }
+      country_rooms: {
+        Row: { id: string; room_code: string; host_id: string; player_ids: string[]; player_names: string[]; status: string; settings: Json; game_state: Json; created_at: string; updated_at: string }
+        Insert: { id?: string; room_code: string; host_id: string; player_ids: string[]; player_names: string[]; status?: string; settings?: Json; game_state?: Json; created_at?: string; updated_at?: string }
+        Update: { id?: string; room_code?: string; host_id?: string; player_ids?: string[]; player_names?: string[]; status?: string; settings?: Json; game_state?: Json; created_at?: string; updated_at?: string }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -87,6 +93,9 @@ export type Database = {
         Args: { target_room_id: string }
         Returns: undefined
       }
+      join_country_room: { Args: { join_code: string; player_name: string }; Returns: Database["public"]["Tables"]["country_rooms"]["Row"][] }
+      leave_country_room: { Args: { target_room_id: string }; Returns: undefined }
+      country_submit_answers: { Args: { target_room_id: string; player_answers: Json }; Returns: Database["public"]["Tables"]["country_rooms"]["Row"][] }
     }
     Enums: {
       [_ in never]: never

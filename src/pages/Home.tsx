@@ -51,22 +51,25 @@ const Home = () => {
               </article>
             </Link>
 
-            <article className="flex min-h-72 flex-col rounded-xl border border-border bg-secondary/75 p-8 opacity-80 shadow-deep backdrop-blur">
+            <Link to="/country" className="group rounded-xl border border-gold/40 bg-secondary/90 p-1 shadow-deep transition-all hover:-translate-y-1 hover:border-gold hover:shadow-gold">
+            <article className="flex min-h-72 flex-col rounded-lg border border-border bg-background/45 p-7 backdrop-blur">
               <div className="mb-8 flex items-start justify-between">
                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-gold/35 bg-background/60 text-gold">
                   <Globe2 className="h-8 w-8" />
                 </div>
                 <span className="rounded-full border border-gold/35 px-3 py-1 text-xs font-bold uppercase tracking-wider text-gold/80">
-                  Coming soon
+                  Multiplayer
                 </span>
               </div>
               <div className="mt-auto">
                 <h3 className="text-3xl font-bold text-gold">Country Game</h3>
                 <p className="mt-2 text-sm leading-6 text-foreground/65">
-                  Put your knowledge of countries and the world to the test.
+                  Race the clock, compare answers, challenge your friends and top the leaderboard.
                 </p>
+                <div className="mt-6 flex items-center gap-2 font-semibold text-gold">Choose Country Game <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></div>
               </div>
             </article>
+            </Link>
 
             <article className="flex min-h-72 flex-col items-center justify-center rounded-xl border border-dashed border-gold/35 bg-background/20 p-8 text-center backdrop-blur">
               <div className="flex h-16 w-16 items-center justify-center rounded-full border border-gold/30 bg-secondary/70 text-gold">
